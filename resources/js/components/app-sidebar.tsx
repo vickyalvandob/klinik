@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     ClipboardList,
+    ContactRound,
     KeyRound,
     Pill,
     Settings2,
@@ -27,6 +28,7 @@ import { index as rolesIndex } from '@/routes/clinic-roles';
 import { index as usersIndex } from '@/routes/clinic-users';
 import { show as showClinic } from '@/routes/clinics';
 import { index as masterDataIndex } from '@/routes/master-data';
+import { index as patientsIndex } from '@/routes/patients';
 import { edit as workflowEdit } from '@/routes/workflow';
 import type { NavItem } from '@/types';
 
@@ -40,6 +42,15 @@ export function AppSidebar() {
             href: dashboard(),
             icon: ClipboardList,
         },
+        ...(can('patient.view')
+            ? [
+                  {
+                      title: 'Pasien',
+                      href: patientsIndex(),
+                      icon: ContactRound,
+                  },
+              ]
+            : []),
     ];
     const managementItems: NavItem[] = currentClinic
         ? [

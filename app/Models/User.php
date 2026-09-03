@@ -44,6 +44,12 @@ class User extends Authenticatable
         return $this->hasMany(ClinicMembership::class);
     }
 
+    /** @return HasMany<Patient, $this> */
+    public function createdPatients(): HasMany
+    {
+        return $this->hasMany(Patient::class, 'created_by');
+    }
+
     public function hasClinicPermission(string $permission): bool
     {
         $currentClinic = app(CurrentClinic::class);

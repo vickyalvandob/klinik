@@ -94,7 +94,7 @@ export default function Welcome() {
                             </div>
                         </div>
 
-                        <div className="bg-card rounded-2xl border p-5 shadow-sm sm:p-7">
+                        <div className="bg-card rounded-2xl border p-5 sm:p-7">
                             <p className="text-primary text-sm font-medium">
                                 Alur kerja utama
                             </p>

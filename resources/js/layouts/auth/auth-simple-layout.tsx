@@ -13,7 +13,7 @@ export default function AuthSimpleLayout({
     return (
         <div className="bg-muted/30 flex min-h-svh flex-col items-center justify-center p-4 sm:p-6 md:p-10">
             <div className="w-full max-w-sm">
-                <div className="bg-card flex flex-col gap-8 rounded-xl border p-6 shadow-sm sm:p-8">
+                <div className="bg-card flex flex-col gap-8 rounded-xl border p-6 sm:p-8">
                     <div className="flex flex-col items-center gap-4">
                         <Link
                             href={home()}

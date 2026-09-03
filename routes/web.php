@@ -5,6 +5,8 @@ use App\Http\Controllers\ClinicRoleController;
 use App\Http\Controllers\ClinicUserController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\PatientController;
+use App\Http\Controllers\PatientDuplicateController;
 use App\Http\Controllers\Platform\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\WorkflowSettingController;
@@ -25,6 +27,9 @@ Route::middleware(['auth', 'active', 'verified', 'clinic.context'])->group(funct
 
     Route::middleware('clinic.onboarded')->group(function () {
         Route::inertia('dashboard', 'dashboard')->name('dashboard');
+
+        Route::get('patients/duplicates', PatientDuplicateController::class)->name('patients.duplicates');
+        Route::resource('patients', PatientController::class)->except('destroy');
 
         Route::get('clinics/{clinic}', [ClinicController::class, 'show'])->name('clinics.show');
         Route::get('clinics/{clinic}/edit', [ClinicController::class, 'edit'])->name('clinics.edit');
