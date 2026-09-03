@@ -20,6 +20,40 @@ test('users can authenticate using the login screen', function () {
 
     $this->assertAuthenticated();
     $response->assertRedirect(route('dashboard', absolute: false));
+    expect($user->refresh()->last_login_at)->not->toBeNull();
+});
+
+test('inactive users can not authenticate', function () {
+    $user = User::factory()->inactive()->create();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertSessionHasErrors('email');
+
+    $this->assertGuest();
+});
+
+test('an inactive authenticated session is logged out', function () {
+    $user = User::factory()->inactive()->create();
+
+    $this->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertRedirect(route('login'))
+        ->assertSessionHas('status', 'Akun Anda sedang dinonaktifkan.');
+
+    $this->assertGuest();
+});
+
+test('platform admins are redirected to the platform area', function () {
+    $user = User::factory()->platformAdmin()->create();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertRedirect(route('platform.index', absolute: false));
+
+    $this->assertAuthenticatedAs($user);
 });
 
 test('users with two factor enabled are redirected to two factor challenge', function () {

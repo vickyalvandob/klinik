@@ -1,4 +1,9 @@
 import type { Auth } from '@/types/auth';
+import type {
+    CurrentClinic,
+    CurrentMembership,
+    CurrentTenant,
+} from '@/types/tenancy';
 
 declare module 'react' {
     interface InputHTMLAttributes<T> {
@@ -11,6 +16,9 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             auth: Auth;
+            currentTenant: CurrentTenant | null;
+            currentClinic: CurrentClinic | null;
+            currentMembership: CurrentMembership | null;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

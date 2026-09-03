@@ -29,6 +29,9 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'is_active' => true,
+            'is_platform_admin' => false,
+            'last_login_at' => null,
             'remember_token' => Str::random(10),
         ];
     }
@@ -46,5 +49,26 @@ class UserFactory extends Factory
     /**
      * Indicate that the model has two-factor authentication configured.
      */
-    public function withTwoFactor(): static {}
+    public function withTwoFactor(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'two_factor_secret' => encrypt('test-secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['test-recovery-code'], JSON_THROW_ON_ERROR)),
+            'two_factor_confirmed_at' => now(),
+        ]);
+    }
+
+    public function inactive(): static
+    {
+        return $this->state(fn (): array => [
+            'is_active' => false,
+        ]);
+    }
+
+    public function platformAdmin(): static
+    {
+        return $this->state(fn (): array => [
+            'is_platform_admin' => true,
+        ]);
+    }
 }

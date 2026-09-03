@@ -4,9 +4,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
+import PlatformLayout from '@/layouts/platform-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Klinik';
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
@@ -16,6 +17,8 @@ void createInertiaApp({
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
+            case name.startsWith('platform/'):
+                return PlatformLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
             default:
@@ -32,7 +35,7 @@ void createInertiaApp({
         );
     },
     progress: {
-        color: '#4B5563',
+        color: '#168579',
     },
 });
 

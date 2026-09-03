@@ -1,5 +1,14 @@
 <?php
 
+use App\Actions\SyncAuthorizationCatalog;
+use App\Models\Clinic;
+use App\Models\ClinicMembership;
+use App\Models\Role;
+use App\Models\Tenant;
+use App\Models\User;
+use App\Support\Tenancy\CurrentClinic;
+use App\Support\Tenancy\CurrentTenant;
+use App\SystemRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +53,30 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * @return array{
+ *     tenant: Tenant,
+ *     clinic: Clinic,
+ *     user: User,
+ *     membership: ClinicMembership,
+ *     role: Role
+ * }
+ */
+function createClinicUser(SystemRole $systemRole = SystemRole::OwnerAdmin): array
 {
-    // ..
+    app(CurrentClinic::class)->clear();
+    app(CurrentTenant::class)->clear();
+    app(SyncAuthorizationCatalog::class)->execute();
+
+    $tenant = Tenant::factory()->create();
+    $clinic = Clinic::factory()->for($tenant)->create();
+    $user = User::factory()->create();
+    $role = Role::query()->where('code', $systemRole->value)->firstOrFail();
+    $membership = ClinicMembership::factory()
+        ->forClinic($clinic)
+        ->for($user)
+        ->for($role)
+        ->create();
+
+    return compact('tenant', 'clinic', 'user', 'membership', 'role');
 }
