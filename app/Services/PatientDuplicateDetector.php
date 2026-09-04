@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\Patient;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class PatientDuplicateDetector
 {
@@ -75,6 +75,7 @@ class PatientDuplicateDetector
     }
 
     /**
+     * @param  Collection<int, Patient>  $patients
      * @param  array{national_id_number?: string|null}  $identity
      */
     public function hasExactNationalIdMatch(Collection $patients, array $identity): bool

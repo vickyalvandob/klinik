@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    Activity,
     Building2,
     ClipboardList,
     ContactRound,
@@ -29,6 +30,8 @@ import { index as usersIndex } from '@/routes/clinic-users';
 import { show as showClinic } from '@/routes/clinics';
 import { index as masterDataIndex } from '@/routes/master-data';
 import { index as patientsIndex } from '@/routes/patients';
+import { index as triagesIndex } from '@/routes/triages';
+import { index as doctorQueueIndex } from '@/routes/doctor-queue';
 import { edit as workflowEdit } from '@/routes/workflow';
 import type { NavItem } from '@/types';
 
@@ -48,6 +51,24 @@ export function AppSidebar() {
                       title: 'Pasien',
                       href: patientsIndex(),
                       icon: ContactRound,
+                  },
+              ]
+            : []),
+        ...(can('triage.view')
+            ? [
+                  {
+                      title: 'Pemeriksaan Awal',
+                      href: triagesIndex(),
+                      icon: Activity,
+                  },
+              ]
+            : []),
+        ...(can('medical_record.view')
+            ? [
+                  {
+                      title: 'Pasien Saya',
+                      href: doctorQueueIndex(),
+                      icon: Stethoscope,
                   },
               ]
             : []),

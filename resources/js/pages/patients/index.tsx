@@ -91,18 +91,26 @@ export default function PatientsIndex({
                                     className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border pr-3 pl-9 text-sm outline-none focus-visible:ring-[3px]"
                                     aria-label="Filter jenis kelamin"
                                 >
-                                    <option value="">Semua jenis kelamin</option>
+                                    <option value="">
+                                        Semua jenis kelamin
+                                    </option>
                                     <option value="male">Laki-laki</option>
                                     <option value="female">Perempuan</option>
                                 </select>
                             </div>
                             <div className="flex gap-2">
-                                <Button type="submit" className="flex-1 lg:flex-none">
+                                <Button
+                                    type="submit"
+                                    className="flex-1 lg:flex-none"
+                                >
                                     Cari
                                 </Button>
                                 {hasFilters && (
                                     <Button asChild variant="ghost" size="icon">
-                                        <Link href={index()} aria-label="Reset filter">
+                                        <Link
+                                            href={index()}
+                                            aria-label="Reset filter"
+                                        >
                                             <X />
                                         </Link>
                                     </Button>
@@ -147,7 +155,9 @@ export default function PatientsIndex({
                                             <TableHead>Kontak</TableHead>
                                             <TableHead>Alergi aktif</TableHead>
                                             <TableHead className="w-12">
-                                                <span className="sr-only">Aksi</span>
+                                                <span className="sr-only">
+                                                    Aksi
+                                                </span>
                                             </TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -156,7 +166,9 @@ export default function PatientsIndex({
                                             <TableRow key={patient.uuid}>
                                                 <TableCell>
                                                     <Link
-                                                        href={show(patient.uuid)}
+                                                        href={show(
+                                                            patient.uuid,
+                                                        )}
                                                         className="hover:text-primary font-medium underline-offset-4 hover:underline"
                                                     >
                                                         {patient.name}
@@ -171,7 +183,9 @@ export default function PatientsIndex({
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="font-mono text-xs font-medium">
-                                                    {patient.medical_record_number}
+                                                    {
+                                                        patient.medical_record_number
+                                                    }
                                                 </TableCell>
                                                 <TableCell>
                                                     <p className="text-sm">
@@ -180,7 +194,9 @@ export default function PatientsIndex({
                                                         )}
                                                     </p>
                                                     <p className="text-muted-foreground mt-1 text-xs">
-                                                        {genderLabel(patient.gender)}
+                                                        {genderLabel(
+                                                            patient.gender,
+                                                        )}
                                                     </p>
                                                 </TableCell>
                                                 <TableCell>
@@ -245,13 +261,14 @@ export default function PatientsIndex({
                                                 {patient.medical_record_number}
                                             </p>
                                             <p className="text-muted-foreground mt-2 text-xs">
-                                                {formatDate(patient.birth_date)} ·{' '}
-                                                {genderLabel(patient.gender)}
+                                                {formatDate(patient.birth_date)}{' '}
+                                                · {genderLabel(patient.gender)}
                                                 {patient.phone
                                                     ? ` · ${patient.phone}`
                                                     : ''}
                                             </p>
-                                            {patient.active_allergies_count > 0 && (
+                                            {patient.active_allergies_count >
+                                                0 && (
                                                 <p className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                                                     <ShieldAlert className="size-3.5" />
                                                     {

@@ -21,11 +21,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $require_triage
  * @property bool $allow_walk_in
  * @property bool $pharmacy_enabled
+ * @property bool $billing_enabled
+ * @property bool $require_primary_diagnosis
+ * @property bool $require_final_medical_record
+ * @property bool $allow_partial_payment
  * @property bool $auto_send_prescription_to_pharmacy
  */
 #[Fillable([
     'opening_time', 'closing_time', 'default_visit_duration_minutes', 'require_triage',
-    'allow_walk_in', 'pharmacy_enabled', 'auto_send_prescription_to_pharmacy',
+    'allow_walk_in', 'pharmacy_enabled', 'billing_enabled',
+    'require_primary_diagnosis', 'require_final_medical_record',
+    'allow_partial_payment', 'auto_send_prescription_to_pharmacy',
 ])]
 class ClinicWorkflowSetting extends Model
 {
@@ -46,6 +52,10 @@ class ClinicWorkflowSetting extends Model
             'require_triage' => 'boolean',
             'allow_walk_in' => 'boolean',
             'pharmacy_enabled' => 'boolean',
+            'billing_enabled' => 'boolean',
+            'require_primary_diagnosis' => 'boolean',
+            'require_final_medical_record' => 'boolean',
+            'allow_partial_payment' => 'boolean',
             'auto_send_prescription_to_pharmacy' => 'boolean',
         ];
     }

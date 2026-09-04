@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\HasUuid;
+use Database\Factories\PatientAllergyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -30,7 +31,7 @@ use Illuminate\Support\Carbon;
 ])]
 class PatientAllergy extends Model
 {
-    /** @use HasFactory<\Database\Factories\PatientAllergyFactory> */
+    /** @use HasFactory<PatientAllergyFactory> */
     use BelongsToTenant, HasFactory, HasUuid;
 
     /** @return BelongsTo<Patient, $this> */

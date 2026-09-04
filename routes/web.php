@@ -1,14 +1,24 @@
 <?php
 
+use App\Http\Controllers\ClinicalCatalogController;
 use App\Http\Controllers\ClinicController;
 use App\Http\Controllers\ClinicRoleController;
 use App\Http\Controllers\ClinicUserController;
+use App\Http\Controllers\ConsultationController;
+use App\Http\Controllers\DoctorQueueController;
+use App\Http\Controllers\EncounterCancellationController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\MedicalRecordAmendmentController;
+use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientDuplicateController;
 use App\Http\Controllers\Platform\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
+use App\Http\Controllers\RegistrationController;
+use App\Http\Controllers\RegistrationPatientSearchController;
+use App\Http\Controllers\TodayController;
+use App\Http\Controllers\TriageController;
 use App\Http\Controllers\WorkflowSettingController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,10 +36,37 @@ Route::middleware(['auth', 'active', 'verified', 'clinic.context'])->group(funct
     });
 
     Route::middleware('clinic.onboarded')->group(function () {
-        Route::inertia('dashboard', 'dashboard')->name('dashboard');
+        Route::get('dashboard', TodayController::class)->name('dashboard');
 
         Route::get('patients/duplicates', PatientDuplicateController::class)->name('patients.duplicates');
         Route::resource('patients', PatientController::class)->except('destroy');
+
+        Route::get('registrations/patients', RegistrationPatientSearchController::class)
+            ->name('registrations.patients');
+        Route::get('registrations/create', [RegistrationController::class, 'create'])
+            ->name('registrations.create');
+        Route::post('registrations', [RegistrationController::class, 'store'])
+            ->name('registrations.store');
+        Route::post('encounters/{encounter}/cancellation', EncounterCancellationController::class)
+            ->name('encounters.cancellations.store');
+
+        Route::get('triages', [TriageController::class, 'index'])->name('triages.index');
+        Route::get('encounters/{encounter}/triage', [TriageController::class, 'edit'])
+            ->name('triages.edit');
+        Route::put('encounters/{encounter}/triage', [TriageController::class, 'update'])
+            ->name('triages.update');
+
+        Route::get('doctor', DoctorQueueController::class)->name('doctor-queue.index');
+        Route::post('encounters/{encounter}/consultation', ConsultationController::class)
+            ->name('consultations.store');
+        Route::get('encounters/{encounter}/medical-record', [MedicalRecordController::class, 'edit'])
+            ->name('medical-records.edit');
+        Route::put('encounters/{encounter}/medical-record', [MedicalRecordController::class, 'update'])
+            ->name('medical-records.update');
+        Route::post('medical-records/{medicalRecord}/amendments', [MedicalRecordAmendmentController::class, 'store'])
+            ->name('medical-record-amendments.store');
+        Route::get('clinical-catalog/{resource}', ClinicalCatalogController::class)
+            ->name('clinical-catalog.show');
 
         Route::get('clinics/{clinic}', [ClinicController::class, 'show'])->name('clinics.show');
         Route::get('clinics/{clinic}/edit', [ClinicController::class, 'edit'])->name('clinics.edit');

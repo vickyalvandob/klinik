@@ -3,13 +3,19 @@
 use App\Actions\SyncAuthorizationCatalog;
 use App\Models\Clinic;
 use App\Models\ClinicMembership;
+use App\Models\ClinicWorkflowSetting;
+use App\Models\Patient;
+use App\Models\Practitioner;
 use App\Models\Role;
+use App\Models\ServiceUnit;
+use App\Models\StaffProfile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
 use App\SystemRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /*
@@ -79,4 +85,76 @@ function createClinicUser(SystemRole $systemRole = SystemRole::OwnerAdmin): arra
         ->create();
 
     return compact('tenant', 'clinic', 'user', 'membership', 'role');
+}
+
+/**
+ * @return array{
+ *     tenant: Tenant,
+ *     clinic: Clinic,
+ *     user: User,
+ *     membership: ClinicMembership,
+ *     role: Role,
+ *     patient: Patient,
+ *     serviceUnit: ServiceUnit,
+ *     practitioner: Practitioner
+ * }
+ */
+function createClinicWorkflow(
+    SystemRole $systemRole = SystemRole::OwnerAdmin,
+    bool $requireTriage = true,
+): array {
+    $context = createClinicUser($systemRole);
+    $tenant = $context['tenant'];
+    $clinic = $context['clinic'];
+    $user = $context['user'];
+
+    ClinicWorkflowSetting::factory()->create([
+        'tenant_id' => $tenant->id,
+        'clinic_id' => $clinic->id,
+        'require_triage' => $requireTriage,
+        'allow_walk_in' => true,
+    ]);
+    $serviceUnit = ServiceUnit::factory()->create([
+        'tenant_id' => $tenant->id,
+        'clinic_id' => $clinic->id,
+        'code' => 'PU',
+        'name' => 'Poli Umum',
+        'queue_prefix' => 'A',
+    ]);
+    $staffProfile = StaffProfile::factory()->create([
+        'tenant_id' => $tenant->id,
+        'clinic_id' => $clinic->id,
+        'employee_number' => 'DOC-001',
+        'name' => 'dr. Test',
+    ]);
+    $practitioner = Practitioner::factory()->create([
+        'tenant_id' => $tenant->id,
+        'clinic_id' => $clinic->id,
+        'staff_profile_id' => $staffProfile->id,
+        'profession' => 'doctor',
+        'is_active' => true,
+    ]);
+    $patient = Patient::factory()->create([
+        'tenant_id' => $tenant->id,
+        'created_by' => $user->id,
+        'national_id_number' => null,
+    ]);
+
+    return [
+        ...$context,
+        'patient' => $patient,
+        'serviceUnit' => $serviceUnit,
+        'practitioner' => $practitioner,
+    ];
+}
+
+/** @param array<string, mixed> $context */
+function registerPatient(TestCase $test, array $context): TestResponse
+{
+    return $test->actingAs($context['user'])->post(route('registrations.store'), [
+        'patient_id' => $context['patient']->uuid,
+        'service_unit_id' => $context['serviceUnit']->uuid,
+        'practitioner_id' => $context['practitioner']->uuid,
+        'chief_complaint' => 'Keluhan pasien untuk pemeriksaan',
+    ]);
 }

@@ -11,23 +11,33 @@ import {
     MapPin,
     Pencil,
     Phone,
+    Plus,
     ShieldAlert,
     UserRoundCheck,
 } from 'lucide-react';
 import { EmptyState } from '@/components/empty-state';
 import { PageHeader } from '@/components/page-header';
+import { PaginationLinks } from '@/components/pagination-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
 import { edit, index } from '@/routes/patients';
-import type { PatientAllergy, PatientDetail } from '@/types';
+import { create as createRegistration } from '@/routes/registrations';
+import type {
+    EncounterHistory,
+    Paginator,
+    PatientAllergy,
+    PatientDetail,
+} from '@/types';
 
 export default function PatientShow({
     patient,
+    encounters,
     can,
 }: {
     patient: PatientDetail;
-    can: { update: boolean };
+    encounters: Paginator<EncounterHistory>;
+    can: { update: boolean; register: boolean };
 }) {
     const activeAllergies = patient.allergies.filter(
         (allergy) => allergy.status === 'active',
@@ -55,6 +65,17 @@ export default function PatientShow({
                                 <Button asChild>
                                     <Link href={edit(patient.uuid)}>
                                         <Pencil /> Edit pasien
+                                    </Link>
+                                </Button>
+                            )}
+                            {can.register && (
+                                <Button asChild>
+                                    <Link
+                                        href={createRegistration({
+                                            query: { patient: patient.uuid },
+                                        })}
+                                    >
+                                        <Plus /> Daftarkan
                                     </Link>
                                 </Button>
                             )}
@@ -177,14 +198,75 @@ export default function PatientShow({
                         <DetailSection
                             icon={History}
                             title="Riwayat kunjungan"
-                            description="Kunjungan pasien akan tersusun kronologis pada profil ini."
+                            description="Kunjungan terbaru ditampilkan lebih dahulu tanpa membuka data klinis sensitif."
                         >
-                            <EmptyState
-                                icon={CalendarDays}
-                                title="Belum ada riwayat kunjungan"
-                                description="Riwayat akan tampil setelah pasien didaftarkan ke layanan. Data pasien ini tetap siap digunakan untuk pendaftaran berikutnya."
-                                className="min-h-52 rounded-lg border-0 bg-muted/20"
-                            />
+                            {encounters.data.length === 0 ? (
+                                <EmptyState
+                                    icon={CalendarDays}
+                                    title="Belum ada riwayat kunjungan"
+                                    description="Riwayat akan tampil setelah pasien didaftarkan ke layanan."
+                                    className="bg-muted/20 min-h-52 rounded-lg border-0"
+                                    action={
+                                        can.register ? (
+                                            <Button asChild variant="outline">
+                                                <Link
+                                                    href={createRegistration({
+                                                        query: {
+                                                            patient:
+                                                                patient.uuid,
+                                                        },
+                                                    })}
+                                                >
+                                                    <Plus /> Daftarkan pasien
+                                                </Link>
+                                            </Button>
+                                        ) : undefined
+                                    }
+                                />
+                            ) : (
+                                <div className="grid gap-3">
+                                    {encounters.data.map((encounter) => (
+                                        <article
+                                            key={encounter.uuid}
+                                            className="grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                                        >
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="font-mono text-sm font-semibold">
+                                                        {encounter.queue_number}
+                                                    </p>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="font-normal"
+                                                    >
+                                                        {encounter.status.label}
+                                                    </Badge>
+                                                </div>
+                                                <p className="mt-2 text-sm font-medium">
+                                                    {encounter.service_unit} ·{' '}
+                                                    {encounter.practitioner}
+                                                </p>
+                                                <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
+                                                    {encounter.chief_complaint}
+                                                </p>
+                                            </div>
+                                            <div className="text-muted-foreground text-xs sm:text-right">
+                                                <p>
+                                                    {formatDateTime(
+                                                        encounter.registered_at,
+                                                    )}
+                                                </p>
+                                                <p className="mt-1 font-mono">
+                                                    {
+                                                        encounter.registration_number
+                                                    }
+                                                </p>
+                                            </div>
+                                        </article>
+                                    ))}
+                                    <PaginationLinks links={encounters.links} />
+                                </div>
+                            )}
                         </DetailSection>
                     </div>
 
@@ -208,7 +290,7 @@ export default function PatientShow({
                                     ))}
                                     {inactiveAllergies.length > 0 && (
                                         <div className="border-t pt-3">
-                                            <p className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
+                                            <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
                                                 Riwayat tidak aktif
                                             </p>
                                             <div className="grid gap-2 opacity-70">
@@ -353,6 +435,16 @@ function formatDate(value: string) {
         month: 'short',
         year: 'numeric',
     }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatDateTime(value: string) {
+    return new Intl.DateTimeFormat('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(new Date(value));
 }
 
 function genderLabel(gender: PatientDetail['gender']) {

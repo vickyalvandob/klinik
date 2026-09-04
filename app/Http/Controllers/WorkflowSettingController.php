@@ -31,6 +31,10 @@ class WorkflowSettingController extends Controller
                 'require_triage' => true,
                 'allow_walk_in' => true,
                 'pharmacy_enabled' => true,
+                'billing_enabled' => true,
+                'require_primary_diagnosis' => true,
+                'require_final_medical_record' => true,
+                'allow_partial_payment' => false,
                 'auto_send_prescription_to_pharmacy' => true,
             ]);
         }
@@ -43,6 +47,10 @@ class WorkflowSettingController extends Controller
                 'require_triage' => $settings->require_triage,
                 'allow_walk_in' => $settings->allow_walk_in,
                 'pharmacy_enabled' => $settings->pharmacy_enabled,
+                'billing_enabled' => $settings->billing_enabled,
+                'require_primary_diagnosis' => $settings->require_primary_diagnosis,
+                'require_final_medical_record' => $settings->require_final_medical_record,
+                'allow_partial_payment' => $settings->allow_partial_payment,
                 'auto_send_prescription_to_pharmacy' => $settings->auto_send_prescription_to_pharmacy,
             ],
         ]);

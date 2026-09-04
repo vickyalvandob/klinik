@@ -36,9 +36,9 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
         patient?.national_id_number ?? '',
     );
     const [phone, setPhone] = useState(patient?.phone ?? '');
-    const [candidates, setCandidates] = useState<
-        PatientDuplicateCandidate[]
-    >([]);
+    const [candidates, setCandidates] = useState<PatientDuplicateCandidate[]>(
+        [],
+    );
     const [checkingDuplicates, setCheckingDuplicates] = useState(false);
     const [duplicateReviewed, setDuplicateReviewed] = useState(false);
     const [allergies, setAllergies] = useState<AllergyRow[]>(
@@ -79,8 +79,7 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
                         query: {
                             name: name || undefined,
                             birth_date: birthDate || undefined,
-                            national_id_number:
-                                nationalIdNumber || undefined,
+                            national_id_number: nationalIdNumber || undefined,
                             phone: phone || undefined,
                             except: patient?.uuid,
                         },
@@ -102,7 +101,12 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
                 setCandidates(result.candidates);
                 setDuplicateReviewed(result.candidates.length === 0);
             } catch (error) {
-                if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                if (
+                    !(
+                        error instanceof DOMException &&
+                        error.name === 'AbortError'
+                    )
+                ) {
                     setCandidates([]);
                 }
             } finally {
@@ -159,11 +163,7 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
     }
 
     return (
-        <Form
-            {...formRoute}
-            className="grid gap-5"
-            disableWhileProcessing
-        >
+        <Form {...formRoute} className="grid gap-5" disableWhileProcessing>
             {({ errors, processing }) => (
                 <>
                     <input
@@ -569,10 +569,10 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
                                                         updateAllergy(
                                                             allergy.clientId,
                                                             {
-                                                                severity:
-                                                                    (event.target
-                                                                        .value ||
-                                                                        null) as AllergyRow['severity'],
+                                                                severity: (event
+                                                                    .target
+                                                                    .value ||
+                                                                    null) as AllergyRow['severity'],
                                                             },
                                                         )
                                                     }
@@ -635,11 +635,7 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
 
                     <div className="bg-background/95 sticky bottom-0 z-10 flex flex-col-reverse gap-2 border-t py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-end">
                         <Button asChild type="button" variant="ghost">
-                            <Link
-                                href={
-                                    patient ? show(patient.uuid) : index()
-                                }
-                            >
+                            <Link href={patient ? show(patient.uuid) : index()}>
                                 Batal
                             </Link>
                         </Button>
@@ -802,9 +798,7 @@ function DuplicateReview({
                         </Button>
                     )}
                     {error && (
-                        <p className="text-destructive mt-2 text-xs">
-                            {error}
-                        </p>
+                        <p className="text-destructive mt-2 text-xs">{error}</p>
                     )}
                 </div>
             </div>

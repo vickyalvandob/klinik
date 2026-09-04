@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Patient;
+
 class StorePatientRequest extends PatientRequest
 {
     /**
@@ -9,6 +11,6 @@ class StorePatientRequest extends PatientRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('create', \App\Models\Patient::class) === true;
+        return $this->user()?->can('create', Patient::class) === true;
     }
 }

@@ -29,6 +29,10 @@ class UpdateWorkflowSettingRequest extends FormRequest
             'require_triage' => ['required', 'boolean'],
             'allow_walk_in' => ['required', 'boolean'],
             'pharmacy_enabled' => ['required', 'boolean'],
+            'billing_enabled' => ['required', 'boolean'],
+            'require_primary_diagnosis' => ['required', 'boolean'],
+            'require_final_medical_record' => ['required', 'boolean'],
+            'allow_partial_payment' => ['required', 'boolean'],
             'auto_send_prescription_to_pharmacy' => ['required', 'boolean'],
         ];
     }
@@ -43,6 +47,10 @@ class UpdateWorkflowSettingRequest extends FormRequest
             'require_triage' => 'kewajiban triase',
             'allow_walk_in' => 'pendaftaran walk-in',
             'pharmacy_enabled' => 'alur farmasi',
+            'billing_enabled' => 'alur pembayaran',
+            'require_primary_diagnosis' => 'diagnosis utama',
+            'require_final_medical_record' => 'finalisasi rekam medis',
+            'allow_partial_payment' => 'pembayaran sebagian',
             'auto_send_prescription_to_pharmacy' => 'pengiriman resep otomatis',
         ];
     }

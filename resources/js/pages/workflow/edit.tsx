@@ -16,6 +16,10 @@ type Settings = {
     require_triage: boolean;
     allow_walk_in: boolean;
     pharmacy_enabled: boolean;
+    billing_enabled: boolean;
+    require_primary_diagnosis: boolean;
+    require_final_medical_record: boolean;
+    allow_partial_payment: boolean;
     auto_send_prescription_to_pharmacy: boolean;
 };
 
@@ -119,6 +123,34 @@ export default function WorkflowEdit({ settings }: { settings: Settings }) {
                                         label="Aktifkan farmasi"
                                         description="Resep dapat diproses oleh petugas farmasi."
                                         checked={settings.pharmacy_enabled}
+                                    />
+                                    <BooleanSetting
+                                        name="billing_enabled"
+                                        label="Aktifkan pembayaran"
+                                        description="Pasien masuk ke tahap pembayaran setelah pelayanan klinis selesai."
+                                        checked={settings.billing_enabled}
+                                    />
+                                    <BooleanSetting
+                                        name="require_primary_diagnosis"
+                                        label="Wajib diagnosis utama"
+                                        description="Dokter harus memilih satu diagnosis utama sebelum finalisasi."
+                                        checked={
+                                            settings.require_primary_diagnosis
+                                        }
+                                    />
+                                    <BooleanSetting
+                                        name="require_final_medical_record"
+                                        label="Wajib finalisasi RME"
+                                        description="Pelayanan klinis diselesaikan melalui rekam medis final."
+                                        checked={
+                                            settings.require_final_medical_record
+                                        }
+                                    />
+                                    <BooleanSetting
+                                        name="allow_partial_payment"
+                                        label="Izinkan pembayaran sebagian"
+                                        description="Kasir dapat menerima pembayaran bertahap pada fase billing."
+                                        checked={settings.allow_partial_payment}
                                     />
                                     <BooleanSetting
                                         name="auto_send_prescription_to_pharmacy"

@@ -2,15 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Patient;
+use App\Services\PatientDuplicateDetector;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
-use App\Models\Patient;
-use App\Services\PatientDuplicateDetector;
-use App\Support\Tenancy\CurrentTenant;
 
 abstract class PatientRequest extends FormRequest
 {
@@ -133,7 +133,9 @@ abstract class PatientRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $allergies = collect($this->input('allergies', []))
+        $allergyInput = $this->input('allergies', []);
+        $allergyInput = is_array($allergyInput) ? $allergyInput : [];
+        $allergies = collect($allergyInput)
             ->filter(fn (mixed $allergy): bool => is_array($allergy))
             ->map(fn (array $allergy): array => [
                 'uuid' => $this->nullableString($allergy['uuid'] ?? null),

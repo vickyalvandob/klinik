@@ -6,8 +6,10 @@ use App\Actions\CreatePatient;
 use App\Actions\UpdatePatient;
 use App\Http\Requests\StorePatientRequest;
 use App\Http\Requests\UpdatePatientRequest;
+use App\Models\Encounter;
 use App\Models\Patient;
 use App\Support\PatientData;
+use App\Support\Tenancy\CurrentClinic;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +20,8 @@ use Inertia\Response;
 
 class PatientController extends Controller
 {
+    public function __construct(private readonly CurrentClinic $currentClinic) {}
+
     public function index(Request $request): Response
     {
         Gate::authorize('viewAny', Patient::class);
@@ -92,9 +96,41 @@ class PatientController extends Controller
         Gate::authorize('view', $patient);
         $this->loadPatient($patient);
 
+        $encounters = Encounter::query()
+            ->where('clinic_id', $this->currentClinic->id())
+            ->where('patient_id', $patient->id)
+            ->with([
+                'serviceUnit:id,uuid,name',
+                'practitioner:id,uuid,staff_profile_id',
+                'practitioner.staffProfile:id,name',
+                'queueEntry:id,encounter_id,queue_number',
+            ])
+            ->latest('registered_at')
+            ->latest('id')
+            ->paginate(10, pageName: 'encounters_page')
+            ->withQueryString()
+            ->through(fn (Encounter $encounter): array => [
+                'uuid' => $encounter->uuid,
+                'registration_number' => $encounter->registration_number,
+                'registered_at' => $encounter->registered_at->toIso8601String(),
+                'chief_complaint' => $encounter->chief_complaint,
+                'status' => [
+                    'value' => $encounter->status->value,
+                    'label' => $encounter->status->label(),
+                    'tone' => $encounter->status->tone(),
+                ],
+                'service_unit' => $encounter->serviceUnit->name,
+                'practitioner' => $encounter->practitioner->staffProfile->name,
+                'queue_number' => $encounter->queueEntry->queue_number,
+            ]);
+
         return Inertia::render('patients/show', [
             'patient' => PatientData::detail($patient),
-            'can' => ['update' => Gate::allows('update', $patient)],
+            'encounters' => $encounters,
+            'can' => [
+                'update' => Gate::allows('update', $patient),
+                'register' => Gate::allows('create', Encounter::class),
+            ],
         ]);
     }
 

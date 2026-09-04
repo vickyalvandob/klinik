@@ -92,6 +92,18 @@ class Clinic extends Model
         return $this->hasOne(ClinicWorkflowSetting::class);
     }
 
+    /** @return HasMany<Encounter, $this> */
+    public function encounters(): HasMany
+    {
+        return $this->hasMany(Encounter::class);
+    }
+
+    /** @return HasMany<MedicalRecord, $this> */
+    public function medicalRecords(): HasMany
+    {
+        return $this->hasMany(MedicalRecord::class);
+    }
+
     public function hasCompletedOnboarding(): bool
     {
         return $this->onboarding_completed_at !== null;

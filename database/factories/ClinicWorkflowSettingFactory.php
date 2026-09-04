@@ -28,6 +28,10 @@ class ClinicWorkflowSettingFactory extends Factory
             'require_triage' => true,
             'allow_walk_in' => true,
             'pharmacy_enabled' => true,
+            'billing_enabled' => true,
+            'require_primary_diagnosis' => true,
+            'require_final_medical_record' => true,
+            'allow_partial_payment' => false,
             'auto_send_prescription_to_pharmacy' => true,
         ];
     }

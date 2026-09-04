@@ -2,10 +2,15 @@
 
 use App\Models\ClinicMembership;
 use App\Models\ClinicService;
+use App\Models\Encounter;
 use App\Models\Medicine;
+use App\Models\Patient;
+use App\Models\QueueEntry;
 use App\Models\ServiceUnit;
 use App\Models\StaffProfile;
 use App\Models\Tenant;
+use App\Models\Triage;
+use App\Models\TriageAudit;
 use App\Models\User;
 use App\SystemRole;
 use Database\Seeders\DemoClinicSeeder;
@@ -21,7 +26,12 @@ test('the local demo seeder is complete and idempotent', function () {
         ->and(StaffProfile::withoutGlobalScopes()->count())->toBe(6)
         ->and(ServiceUnit::withoutGlobalScopes()->count())->toBe(3)
         ->and(ClinicService::withoutGlobalScopes()->count())->toBe(3)
-        ->and(Medicine::withoutGlobalScopes()->count())->toBe(3);
+        ->and(Medicine::withoutGlobalScopes()->count())->toBe(3)
+        ->and(Patient::withoutGlobalScopes()->count())->toBe(2)
+        ->and(Encounter::withoutGlobalScopes()->count())->toBe(2)
+        ->and(QueueEntry::withoutGlobalScopes()->count())->toBe(2)
+        ->and(Triage::withoutGlobalScopes()->count())->toBe(1)
+        ->and(TriageAudit::withoutGlobalScopes()->count())->toBe(1);
 
     $owner = User::query()->where('email', 'owner@klinik.test')->firstOrFail();
     $platform = User::query()->where('email', 'platform@klinik.test')->firstOrFail();

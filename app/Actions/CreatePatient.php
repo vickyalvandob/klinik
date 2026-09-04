@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Patient;
 use App\Services\PatientMedicalRecordNumberGenerator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreatePatient
 {
@@ -20,6 +21,14 @@ class CreatePatient
     {
         return DB::transaction(function () use ($attributes, $allergies, $userId): Patient {
             $medicalRecord = $this->numberGenerator->generate();
+
+            if (filled($attributes['national_id_number'] ?? null)
+                && Patient::query()->where('national_id_number', $attributes['national_id_number'])->exists()) {
+                throw ValidationException::withMessages([
+                    'national_id_number' => 'NIK sudah digunakan oleh pasien lain. Buka data pasien tersebut sebelum melanjutkan.',
+                ]);
+            }
+
             $patient = Patient::query()->create([
                 ...$attributes,
                 'medical_record_sequence' => $medicalRecord['sequence'],

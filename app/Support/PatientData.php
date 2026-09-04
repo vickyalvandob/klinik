@@ -76,6 +76,20 @@ class PatientData
         ];
     }
 
+    /** @return array<string, mixed> */
+    public static function registrationOption(Patient $patient): array
+    {
+        return [
+            'uuid' => $patient->uuid,
+            'medical_record_number' => $patient->medical_record_number,
+            'name' => $patient->name,
+            'birth_date' => $patient->birth_date->toDateString(),
+            'gender' => $patient->gender,
+            'masked_national_id_number' => self::mask($patient->national_id_number, 4, 4),
+            'masked_phone' => self::mask($patient->phone, 3, 3),
+        ];
+    }
+
     private static function mask(?string $value, int $visibleStart, int $visibleEnd): ?string
     {
         if (blank($value)) {

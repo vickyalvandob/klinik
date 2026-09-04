@@ -3,21 +3,33 @@
 namespace Database\Seeders;
 
 use App\Actions\EnsureClinicRoles;
+use App\EncounterStatus;
 use App\Models\Clinic;
 use App\Models\ClinicMembership;
 use App\Models\ClinicService;
 use App\Models\ClinicWorkflowSetting;
+use App\Models\DailySequence;
+use App\Models\DiagnosisCatalog;
+use App\Models\Encounter;
+use App\Models\EncounterStatusHistory;
 use App\Models\Medicine;
+use App\Models\Patient;
+use App\Models\PatientAllergy;
 use App\Models\Practitioner;
+use App\Models\QueueEntry;
 use App\Models\Role;
 use App\Models\ServiceUnit;
 use App\Models\StaffProfile;
 use App\Models\Tenant;
+use App\Models\Triage;
+use App\Models\TriageAudit;
 use App\Models\User;
+use App\QueueStatus;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
 use App\SystemRole;
 use App\TenantStatus;
+use App\TriageStatus;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -30,6 +42,20 @@ class DemoClinicSeeder extends Seeder
         }
 
         $this->call(AuthorizationSeeder::class);
+
+        foreach ([
+            ['code' => 'J00', 'display' => 'Acute nasopharyngitis (common cold)', 'search_terms' => 'pilek common cold nasofaringitis'],
+            ['code' => 'J02.9', 'display' => 'Acute pharyngitis, unspecified', 'search_terms' => 'faringitis radang tenggorokan'],
+            ['code' => 'R50.9', 'display' => 'Fever, unspecified', 'search_terms' => 'demam fever'],
+            ['code' => 'R51.9', 'display' => 'Headache, unspecified', 'search_terms' => 'sakit kepala pusing headache'],
+            ['code' => 'I10', 'display' => 'Essential (primary) hypertension', 'search_terms' => 'hipertensi tekanan darah tinggi'],
+            ['code' => 'E11.9', 'display' => 'Type 2 diabetes mellitus without complications', 'search_terms' => 'diabetes melitus gula darah'],
+        ] as $definition) {
+            DiagnosisCatalog::query()->updateOrCreate(
+                ['code_system' => 'ICD-10', 'code' => $definition['code']],
+                [...$definition, 'code_system' => 'ICD-10', 'is_active' => true],
+            );
+        }
 
         $tenant = Tenant::query()->updateOrCreate(
             ['slug' => 'klinik-sehat-sentosa'],
@@ -192,9 +218,189 @@ class DemoClinicSeeder extends Seeder
             'require_triage' => true,
             'allow_walk_in' => true,
             'pharmacy_enabled' => true,
+            'billing_enabled' => true,
+            'require_primary_diagnosis' => true,
+            'require_final_medical_record' => true,
+            'allow_partial_payment' => false,
             'auto_send_prescription_to_pharmacy' => true,
         ]);
         $workflow->clinic_id = $clinic->id;
         $workflow->save();
+
+        $owner = User::query()->where('email', 'owner@klinik.test')->firstOrFail();
+        $frontOffice = User::query()->where('email', 'frontoffice@klinik.test')->firstOrFail();
+        $nurse = User::query()->where('email', 'perawat@klinik.test')->firstOrFail();
+        $ownerMembership = ClinicMembership::query()
+            ->where('clinic_id', $clinic->id)
+            ->where('user_id', $owner->id)
+            ->firstOrFail();
+        app(CurrentClinic::class)->set($clinic, $ownerMembership);
+
+        $patientDefinitions = [
+            [
+                'medical_record_sequence' => 1,
+                'medical_record_number' => 'RM000001',
+                'national_id_number' => '3273011503900001',
+                'name' => 'Budi Santoso',
+                'birth_date' => '1990-03-15',
+                'gender' => 'male',
+                'phone' => '081234567801',
+                'address' => 'Bandung',
+            ],
+            [
+                'medical_record_sequence' => 2,
+                'medical_record_number' => 'RM000002',
+                'national_id_number' => '3273014511920002',
+                'name' => 'Siti Aminah',
+                'birth_date' => '1992-11-05',
+                'gender' => 'female',
+                'phone' => '081234567802',
+                'address' => 'Bandung',
+            ],
+        ];
+
+        foreach ($patientDefinitions as $definition) {
+            $patient = Patient::query()->firstOrNew([
+                'medical_record_number' => $definition['medical_record_number'],
+            ]);
+            $patient->fill([
+                ...$definition,
+                'created_by' => $frontOffice->id,
+            ])->save();
+        }
+
+        $budi = Patient::query()->where('medical_record_number', 'RM000001')->firstOrFail();
+        $allergy = PatientAllergy::query()->firstOrNew([
+            'patient_id' => $budi->id,
+            'substance' => 'Penisilin',
+        ]);
+        $allergy->fill([
+            'reaction' => 'Ruam',
+            'severity' => 'moderate',
+            'status' => 'active',
+            'noted_by' => $frontOffice->id,
+            'noted_at' => now(),
+        ])->save();
+
+        $siti = Patient::query()->where('medical_record_number', 'RM000002')->firstOrFail();
+        $today = now($clinic->timezone);
+        $encounterDefinitions = [
+            [
+                'patient' => $budi,
+                'sequence' => 1,
+                'queue' => 'A001',
+                'status' => EncounterStatus::WaitingTriage,
+                'chief_complaint' => 'Demam dan batuk sejak dua hari.',
+            ],
+            [
+                'patient' => $siti,
+                'sequence' => 2,
+                'queue' => 'A002',
+                'status' => EncounterStatus::WaitingDoctor,
+                'chief_complaint' => 'Pusing sejak pagi.',
+            ],
+        ];
+
+        foreach ($encounterDefinitions as $definition) {
+            $registrationNumber = sprintf('REG-%s-%04d', $today->format('Ymd'), $definition['sequence']);
+            $encounter = Encounter::query()->firstOrNew([
+                'clinic_id' => $clinic->id,
+                'registration_number' => $registrationNumber,
+            ]);
+            $encounter->fill([
+                'patient_id' => $definition['patient']->id,
+                'service_unit_id' => $generalUnit->id,
+                'practitioner_id' => $practitioner->id,
+                'encounter_date' => $today->toDateString(),
+                'registration_sequence' => $definition['sequence'],
+                'registration_type' => 'walk_in',
+                'chief_complaint' => $definition['chief_complaint'],
+                'status' => $definition['status'],
+                'registered_at' => $today->copy()->setTime(8, 0)->addMinutes(($definition['sequence'] - 1) * 10),
+                'registered_by' => $frontOffice->id,
+            ]);
+            $encounter->clinic_id = $clinic->id;
+            $encounter->save();
+
+            $queue = QueueEntry::query()->firstOrNew(['encounter_id' => $encounter->id]);
+            $queue->fill([
+                'service_unit_id' => $generalUnit->id,
+                'practitioner_id' => $practitioner->id,
+                'queue_date' => $today->toDateString(),
+                'queue_sequence' => $definition['sequence'],
+                'queue_number' => $definition['queue'],
+                'status' => QueueStatus::Waiting,
+            ]);
+            $queue->clinic_id = $clinic->id;
+            $queue->save();
+
+            $history = EncounterStatusHistory::query()->firstOrNew([
+                'encounter_id' => $encounter->id,
+                'to_status' => $definition['status']->value,
+            ]);
+            $history->fill([
+                'from_status' => null,
+                'reason' => 'Data demo pendaftaran',
+                'changed_by' => $frontOffice->id,
+            ]);
+            $history->clinic_id = $clinic->id;
+            $history->save();
+        }
+
+        foreach (['encounter-registration', "queue:{$generalUnit->id}"] as $scope) {
+            $dailySequence = DailySequence::query()
+                ->where('clinic_id', $clinic->id)
+                ->whereDate('sequence_date', $today->toDateString())
+                ->where('scope', $scope)
+                ->first() ?? new DailySequence([
+                    'sequence_date' => $today->toDateString(),
+                    'scope' => $scope,
+                ]);
+            $dailySequence->fill(['last_number' => 2]);
+            $dailySequence->clinic_id = $clinic->id;
+            $dailySequence->save();
+        }
+
+        $completedEncounter = Encounter::query()
+            ->where('patient_id', $siti->id)
+            ->whereDate('encounter_date', $today->toDateString())
+            ->firstOrFail();
+        $triage = Triage::query()->firstOrNew(['encounter_id' => $completedEncounter->id]);
+        $triage->fill([
+            'chief_complaint' => $completedEncounter->chief_complaint,
+            'systolic_bp' => 110,
+            'diastolic_bp' => 70,
+            'heart_rate' => 76,
+            'respiratory_rate' => 18,
+            'temperature' => 36.8,
+            'spo2' => 99,
+            'weight' => 55.5,
+            'height' => 158,
+            'pain_scale' => 3,
+            'notes' => 'Kondisi umum stabil.',
+            'status' => TriageStatus::Completed,
+            'completed_at' => $today->copy()->setTime(8, 20),
+            'created_by' => $nurse->id,
+            'updated_by' => $nurse->id,
+        ]);
+        $triage->clinic_id = $clinic->id;
+        $triage->save();
+
+        $audit = TriageAudit::query()->firstOrNew([
+            'triage_id' => $triage->id,
+            'action' => 'completed',
+        ]);
+        $audit->fill([
+            'encounter_id' => $completedEncounter->id,
+            'before_values' => null,
+            'after_values' => $triage->only([
+                'chief_complaint', 'systolic_bp', 'diastolic_bp', 'heart_rate',
+                'respiratory_rate', 'temperature', 'spo2', 'weight', 'height',
+                'pain_scale', 'notes', 'status', 'completed_at',
+            ]),
+            'actor_id' => $nurse->id,
+        ]);
+        $audit->clinic_id = $clinic->id;
+        $audit->save();
     }
 }

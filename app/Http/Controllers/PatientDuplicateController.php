@@ -16,8 +16,7 @@ class PatientDuplicateController extends Controller
     public function __invoke(
         FindPatientDuplicatesRequest $request,
         PatientDuplicateDetector $duplicateDetector,
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $validated = $request->validated();
         $except = isset($validated['except'])
             ? Patient::query()->where('uuid', $validated['except'])->firstOrFail()
