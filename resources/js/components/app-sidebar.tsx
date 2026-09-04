@@ -4,12 +4,11 @@ import {
     Building2,
     ClipboardList,
     ContactRound,
+    Database,
     KeyRound,
     Pill,
-    Settings2,
     Stethoscope,
     UserRoundCog,
-    Users,
     Workflow,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
@@ -28,8 +27,10 @@ import { dashboard } from '@/routes';
 import { index as rolesIndex } from '@/routes/clinic-roles';
 import { index as usersIndex } from '@/routes/clinic-users';
 import { show as showClinic } from '@/routes/clinics';
-import { index as masterDataIndex } from '@/routes/master-data';
+import { overview as masterDataOverview } from '@/routes/master-data';
 import { index as patientsIndex } from '@/routes/patients';
+import { index as pharmacyIndex } from '@/routes/pharmacy';
+import { create as registrationCreate } from '@/routes/registrations';
 import { index as triagesIndex } from '@/routes/triages';
 import { index as doctorQueueIndex } from '@/routes/doctor-queue';
 import { edit as workflowEdit } from '@/routes/workflow';
@@ -41,7 +42,7 @@ export function AppSidebar() {
     const can = (permission: string) => permissions.includes(permission);
     const operationalItems: NavItem[] = [
         {
-            title: 'Hari Ini',
+            title: 'Dashboard',
             href: dashboard(),
             icon: ClipboardList,
         },
@@ -51,6 +52,15 @@ export function AppSidebar() {
                       title: 'Pasien',
                       href: patientsIndex(),
                       icon: ContactRound,
+                  },
+              ]
+            : []),
+        ...(can('encounter.create')
+            ? [
+                  {
+                      title: 'Pendaftaran',
+                      href: registrationCreate(),
+                      icon: ClipboardList,
                   },
               ]
             : []),
@@ -66,9 +76,18 @@ export function AppSidebar() {
         ...(can('medical_record.view')
             ? [
                   {
-                      title: 'Pasien Saya',
+                      title: 'Rekam Medis',
                       href: doctorQueueIndex(),
                       icon: Stethoscope,
+                  },
+              ]
+            : []),
+        ...(can('pharmacy.view') || can('prescription.view')
+            ? [
+                  {
+                      title: 'Apotek',
+                      href: pharmacyIndex(),
+                      icon: Pill,
                   },
               ]
             : []),
@@ -83,7 +102,7 @@ export function AppSidebar() {
                             icon: Building2,
                         },
                         {
-                            title: 'Alur Layanan',
+                            title: 'Pengaturan Alur Layanan',
                             href: workflowEdit(),
                             icon: Workflow,
                         },
@@ -92,29 +111,9 @@ export function AppSidebar() {
               ...(can('master_data.manage')
                   ? [
                         {
-                            title: 'Staf',
-                            href: masterDataIndex('staff'),
-                            icon: Users,
-                        },
-                        {
-                            title: 'Praktisi',
-                            href: masterDataIndex('practitioners'),
-                            icon: Stethoscope,
-                        },
-                        {
-                            title: 'Unit Layanan',
-                            href: masterDataIndex('service-units'),
-                            icon: Settings2,
-                        },
-                        {
-                            title: 'Layanan',
-                            href: masterDataIndex('services'),
-                            icon: ClipboardList,
-                        },
-                        {
-                            title: 'Obat',
-                            href: masterDataIndex('medicines'),
-                            icon: Pill,
+                            title: 'Master Data',
+                            href: masterDataOverview(),
+                            icon: Database,
                         },
                     ]
                   : []),
@@ -130,7 +129,7 @@ export function AppSidebar() {
               ...(can('roles.manage')
                   ? [
                         {
-                            title: 'Peran & Izin',
+                            title: 'Peran & Hak Akses',
                             href: rolesIndex(),
                             icon: KeyRound,
                         },

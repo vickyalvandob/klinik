@@ -7,6 +7,7 @@ use App\Models\Encounter;
 use App\Models\MedicalRecord;
 use App\Support\CurrentPractitioner;
 use App\Support\Tenancy\CurrentClinic;
+use App\SystemRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +27,7 @@ class DoctorQueueController extends Controller
 
         $clinic = $this->currentClinic->get();
         $practitioner = $this->currentPractitioner->find();
+        $seesAllPractitioners = $this->currentClinic->membership()->role->code === SystemRole::OwnerAdmin->value;
         $today = now($clinic->timezone)->toDateString();
         $mode = match ($request->string('mode')->toString()) {
             'active' => 'active',
@@ -35,11 +37,12 @@ class DoctorQueueController extends Controller
 
         $encounters = Encounter::query()
             ->where('clinic_id', $clinic->id)
-            ->whereDate('encounter_date', $today)
+            ->when($mode !== 'history', fn (Builder $query) => $query->whereDate('encounter_date', $today))
             ->when(
-                $practitioner === null,
-                fn (Builder $query) => $query->whereRaw('1 = 0'),
-                fn (Builder $query) => $query->where('practitioner_id', $practitioner?->id),
+                ! $seesAllPractitioners,
+                fn (Builder $query) => $practitioner === null
+                    ? $query->whereRaw('1 = 0')
+                    : $query->where('practitioner_id', $practitioner->id),
             )
             ->when($mode === 'queue', fn (Builder $query) => $query->where('status', EncounterStatus::WaitingDoctor->value))
             ->when($mode === 'active', fn (Builder $query) => $query->where('status', EncounterStatus::InConsultation->value))
@@ -89,14 +92,16 @@ class DoctorQueueController extends Controller
             ->where('clinic_id', $clinic->id)
             ->whereDate('encounter_date', $today)
             ->when(
-                $practitioner === null,
-                fn (Builder $query) => $query->whereRaw('1 = 0'),
-                fn (Builder $query) => $query->where('practitioner_id', $practitioner?->id),
+                ! $seesAllPractitioners,
+                fn (Builder $query) => $practitioner === null
+                    ? $query->whereRaw('1 = 0')
+                    : $query->where('practitioner_id', $practitioner->id),
             );
 
         return Inertia::render('doctor-queue/index', [
             'encounters' => $encounters,
             'mode' => $mode,
+            'scope' => $seesAllPractitioners ? 'clinic' : 'practitioner',
             'practitioner' => $practitioner === null ? null : [
                 'uuid' => $practitioner->uuid,
                 'name' => $practitioner->staffProfile()->value('name'),

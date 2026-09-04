@@ -38,8 +38,12 @@ test('an owner can update the clinic profile and workflow settings', function ()
         'require_triage' => true,
         'allow_walk_in' => false,
         'pharmacy_enabled' => true,
+        'billing_enabled' => true,
+        'require_primary_diagnosis' => true,
+        'require_final_medical_record' => true,
+        'allow_partial_payment' => false,
         'auto_send_prescription_to_pharmacy' => false,
-    ])->assertRedirect();
+    ])->assertRedirect()->assertSessionHasNoErrors();
 
     $settings = ClinicWorkflowSetting::withoutGlobalScopes()->where('clinic_id', $clinic->id)->firstOrFail();
     expect($settings->opening_time)->toBe('07:30')

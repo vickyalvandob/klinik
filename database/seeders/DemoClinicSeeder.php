@@ -13,6 +13,7 @@ use App\Models\DiagnosisCatalog;
 use App\Models\Encounter;
 use App\Models\EncounterStatusHistory;
 use App\Models\Medicine;
+use App\Models\MedicineStock;
 use App\Models\Patient;
 use App\Models\PatientAllergy;
 use App\Models\Practitioner;
@@ -235,6 +236,16 @@ class DemoClinicSeeder extends Seeder
             ->where('user_id', $owner->id)
             ->firstOrFail();
         app(CurrentClinic::class)->set($clinic, $ownerMembership);
+
+        Medicine::query()->where('clinic_id', $clinic->id)->each(function (Medicine $medicine) use ($clinic): void {
+            $stock = MedicineStock::query()->firstOrNew(['medicine_id' => $medicine->id]);
+
+            if (! $stock->exists) {
+                $stock->fill(['quantity' => 100, 'last_movement_at' => now()]);
+                $stock->clinic_id = $clinic->id;
+                $stock->save();
+            }
+        });
 
         $patientDefinitions = [
             [

@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Actions\SaveMedicalRecord;
 use App\Http\Requests\SaveMedicalRecordRequest;
 use App\MedicalRecordStatus;
+use App\Models\ClinicService;
 use App\Models\Diagnosis;
+use App\Models\DiagnosisCatalog;
 use App\Models\Encounter;
 use App\Models\EncounterProcedure;
 use App\Models\MedicalRecord;
 use App\Models\MedicalRecordAmendment;
+use App\Models\Medicine;
 use App\Models\PrescriptionItem;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -157,7 +160,7 @@ class MedicalRecordController extends Controller
                 'status_label' => $medicalRecord->status->label(),
                 'finalized_at' => $medicalRecord->finalized_at?->toIso8601String(),
                 'diagnoses' => $medicalRecord->diagnoses->map(fn (Diagnosis $diagnosis): array => [
-                    'catalog_id' => $diagnosis->getRelation('catalog') instanceof \App\Models\DiagnosisCatalog
+                    'catalog_id' => $diagnosis->getRelation('catalog') instanceof DiagnosisCatalog
                         ? $diagnosis->getRelation('catalog')->uuid
                         : '',
                     'code_system' => $diagnosis->code_system,
@@ -167,7 +170,7 @@ class MedicalRecordController extends Controller
                     'notes' => $diagnosis->notes,
                 ])->values(),
                 'procedures' => $medicalRecord->procedures->map(fn (EncounterProcedure $procedure): array => [
-                    'service_id' => $procedure->getRelation('service') instanceof \App\Models\ClinicService
+                    'service_id' => $procedure->getRelation('service') instanceof ClinicService
                         ? $procedure->getRelation('service')->uuid
                         : '',
                     'code' => $procedure->code,
@@ -178,7 +181,7 @@ class MedicalRecordController extends Controller
                 'prescription' => $medicalRecord->prescription === null ? null : [
                     'notes' => $medicalRecord->prescription->notes,
                     'items' => $medicalRecord->prescription->items->map(fn (PrescriptionItem $item): array => [
-                        'medicine_id' => $item->getRelation('medicine') instanceof \App\Models\Medicine
+                        'medicine_id' => $item->getRelation('medicine') instanceof Medicine
                             ? $item->getRelation('medicine')->uuid
                             : '',
                         'name' => $item->medicine_name_snapshot,

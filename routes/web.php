@@ -8,13 +8,19 @@ use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\DoctorQueueController;
 use App\Http\Controllers\EncounterCancellationController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\MasterDataOverviewController;
 use App\Http\Controllers\MedicalRecordAmendmentController;
 use App\Http\Controllers\MedicalRecordController;
+use App\Http\Controllers\MedicineStockAdjustmentController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientDuplicateController;
+use App\Http\Controllers\PharmacyController;
 use App\Http\Controllers\Platform\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
+use App\Http\Controllers\PrescriptionCancellationController;
+use App\Http\Controllers\PrescriptionDispensingController;
+use App\Http\Controllers\PrescriptionProcessingController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\RegistrationPatientSearchController;
 use App\Http\Controllers\TodayController;
@@ -68,6 +74,17 @@ Route::middleware(['auth', 'active', 'verified', 'clinic.context'])->group(funct
         Route::get('clinical-catalog/{resource}', ClinicalCatalogController::class)
             ->name('clinical-catalog.show');
 
+        Route::get('pharmacy', [PharmacyController::class, 'index'])->name('pharmacy.index');
+        Route::get('pharmacy/{prescription}', [PharmacyController::class, 'show'])->name('pharmacy.show');
+        Route::post('pharmacy/{prescription}/processing', PrescriptionProcessingController::class)
+            ->name('pharmacy.processing.store');
+        Route::post('pharmacy/{prescription}/dispensing', PrescriptionDispensingController::class)
+            ->name('pharmacy.dispensing.store');
+        Route::post('pharmacy/{prescription}/cancellation', PrescriptionCancellationController::class)
+            ->name('pharmacy.cancellations.store');
+        Route::post('pharmacy/stock/{medicine}/adjustment', MedicineStockAdjustmentController::class)
+            ->name('pharmacy.stock.adjustments.store');
+
         Route::get('clinics/{clinic}', [ClinicController::class, 'show'])->name('clinics.show');
         Route::get('clinics/{clinic}/edit', [ClinicController::class, 'edit'])->name('clinics.edit');
         Route::put('clinics/{clinic}', [ClinicController::class, 'update'])->name('clinics.update');
@@ -75,6 +92,7 @@ Route::middleware(['auth', 'active', 'verified', 'clinic.context'])->group(funct
         Route::get('workflow', [WorkflowSettingController::class, 'edit'])->name('workflow.edit');
         Route::put('workflow', [WorkflowSettingController::class, 'update'])->name('workflow.update');
 
+        Route::get('master-data', MasterDataOverviewController::class)->name('master-data.overview');
         Route::get('master-data/{resource}', [MasterDataController::class, 'index'])->name('master-data.index');
         Route::post('master-data/{resource}', [MasterDataController::class, 'store'])->name('master-data.store');
         Route::put('master-data/{resource}/{record}', [MasterDataController::class, 'update'])->name('master-data.update');

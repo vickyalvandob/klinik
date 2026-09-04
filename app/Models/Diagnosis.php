@@ -25,7 +25,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property DiagnosisType $diagnosis_type
  * @property string|null $notes
  */
-
 #[Fillable([
     'encounter_id', 'medical_record_id', 'diagnosis_catalog_id', 'code_system',
     'code', 'display', 'diagnosis_type', 'clinical_status', 'notes', 'created_by',

@@ -80,6 +80,10 @@ test('an owner can complete onboarding and make a new clinic operational', funct
         'require_triage' => true,
         'allow_walk_in' => true,
         'pharmacy_enabled' => true,
+        'billing_enabled' => true,
+        'require_primary_diagnosis' => true,
+        'require_final_medical_record' => true,
+        'allow_partial_payment' => false,
         'auto_send_prescription_to_pharmacy' => true,
     ])->assertRedirect(route('onboarding.show'));
 

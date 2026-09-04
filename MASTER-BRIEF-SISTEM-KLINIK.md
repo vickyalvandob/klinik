@@ -435,16 +435,16 @@ Lulus test/build tidak boleh diklaim sebagai browser QA bila tidak ada verifikas
 
 Status ini adalah ledger ringkas, bukan pengganti hasil test atau laporan perubahan.
 
-| Fase | Status per 4 Sep 2026 | Catatan |
-| --- | --- | --- |
-| 0 | Selesai | Fondasi Laravel/Inertia dan quality tooling tersedia. |
-| 1 | Selesai | Tenant context, role/permission, policy, dan isolation tersedia. |
-| 2 | Selesai | Onboarding, klinik, pengguna, role, workflow, dan master data tersedia. |
-| 3 | Selesai | Pasien, MR, duplicate review, alergi, dan histori dasar tersedia. |
-| 4 | Selesai terfokus | Pendaftaran walk-in, encounter, antrean, Hari Ini, dan cancellation tersedia. |
-| 5 | Selesai terfokus | Draft/final triase, vital validation, audit, dan transisi tersedia. |
-| 6 | Aktif | Workspace dokter dan RME adalah fase berikutnya. |
-| 7–14 | Belum dimulai | Dikerjakan berurutan setelah fase sebelumnya lolos gate. |
+| Fase | Status per 4 Sep 2026 | Catatan                                                                       |
+| ---- | --------------------- | ----------------------------------------------------------------------------- |
+| 0    | Selesai               | Fondasi Laravel/Inertia dan quality tooling tersedia.                         |
+| 1    | Selesai               | Tenant context, role/permission, policy, dan isolation tersedia.              |
+| 2    | Selesai               | Onboarding, klinik, pengguna, role, workflow, dan master data tersedia.       |
+| 3    | Selesai               | Pasien, MR, duplicate review, alergi, dan histori dasar tersedia.             |
+| 4    | Selesai terfokus      | Pendaftaran walk-in, encounter, antrean, Hari Ini, dan cancellation tersedia. |
+| 5    | Selesai terfokus      | Draft/final triase, vital validation, audit, dan transisi tersedia.           |
+| 6    | Aktif                 | Workspace dokter dan RME adalah fase berikutnya.                              |
+| 7–14 | Belum dimulai         | Dikerjakan berurutan setelah fase sebelumnya lolos gate.                      |
 
 Verifikasi awal Fase 3–5 pada tanggal di atas: 20 test, 142 assertion, seluruhnya lulus. Full quality gate dijalankan kembali setelah Fase 6 selesai.
 

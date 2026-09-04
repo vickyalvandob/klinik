@@ -19,11 +19,13 @@ type Mode = 'queue' | 'active' | 'history';
 export default function DoctorQueueIndex({
     encounters,
     mode,
+    scope,
     practitioner,
     summary,
 }: {
     encounters: DoctorQueuePage;
     mode: Mode;
+    scope: 'clinic' | 'practitioner';
     practitioner: {
         uuid: string;
         name: string;
@@ -33,20 +35,26 @@ export default function DoctorQueueIndex({
 }) {
     return (
         <>
-            <Head title="Pasien Saya" />
+            <Head title="Rekam Medis" />
             <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
                 <PageHeader
-                    eyebrow="Workspace dokter"
-                    title="Pasien Saya"
+                    eyebrow={
+                        scope === 'clinic'
+                            ? 'Pengawasan klinis'
+                            : 'Workspace dokter'
+                    }
+                    title="Rekam Medis"
                     description={
-                        practitioner
-                            ? `${practitioner.name}${practitioner.specialization ? ` · ${practitioner.specialization}` : ''}`
-                            : 'Akun ini belum terhubung ke data practitioner aktif.'
+                        scope === 'clinic'
+                            ? 'Pantau seluruh pemeriksaan awal, konsultasi aktif, dan riwayat rekam medis klinik.'
+                            : practitioner
+                              ? `${practitioner.name}${practitioner.specialization ? ` · ${practitioner.specialization}` : ''}`
+                              : 'Akun ini belum terhubung ke data practitioner aktif.'
                     }
                 />
 
-                {!practitioner && (
-                    <div className="border-amber-300 bg-amber-50/60 text-amber-950 flex gap-3 rounded-xl border p-4 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
+                {scope === 'practitioner' && !practitioner && (
+                    <div className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50/60 p-4 text-amber-950 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
                         <AlertTriangle className="mt-0.5 size-5 shrink-0" />
                         <div>
                             <p className="text-sm font-semibold">
@@ -78,19 +86,27 @@ export default function DoctorQueueIndex({
                     />
                 </div>
 
-                <nav className="flex gap-2 overflow-x-auto pb-1" aria-label="Status antrean dokter">
-                    {([
-                        ['queue', 'Menunggu'],
-                        ['active', 'Sedang Diperiksa'],
-                        ['history', 'Selesai'],
-                    ] as Array<[Mode, string]>).map(([value, label]) => (
+                <nav
+                    className="flex gap-2 overflow-x-auto pb-1"
+                    aria-label="Status antrean dokter"
+                >
+                    {(
+                        [
+                            ['queue', 'Menunggu'],
+                            ['active', 'Sedang Diperiksa'],
+                            ['history', 'Selesai'],
+                        ] as Array<[Mode, string]>
+                    ).map(([value, label]) => (
                         <Button
                             key={value}
                             asChild
                             size="sm"
                             variant={mode === value ? 'default' : 'outline'}
                         >
-                            <Link href={index({ query: { mode: value } })} preserveState>
+                            <Link
+                                href={index({ query: { mode: value } })}
+                                preserveState
+                            >
                                 {label}
                             </Link>
                         </Button>
@@ -106,13 +122,20 @@ export default function DoctorQueueIndex({
                             </p>
                             <p className="text-muted-foreground max-w-sm text-xs">
                                 Daftar akan terisi otomatis mengikuti status
-                                pelayanan pasien hari ini.
+                                pelayanan pasien{' '}
+                                {mode === 'history'
+                                    ? 'yang telah selesai.'
+                                    : 'hari ini.'}
                             </p>
                         </div>
                     ) : (
                         <div className="divide-y">
                             {encounters.data.map((encounter) => (
-                                <QueueRow key={encounter.uuid} encounter={encounter} mode={mode} />
+                                <QueueRow
+                                    key={encounter.uuid}
+                                    encounter={encounter}
+                                    mode={mode}
+                                />
                             ))}
                         </div>
                     )}
@@ -125,7 +148,13 @@ export default function DoctorQueueIndex({
     );
 }
 
-function QueueRow({ encounter, mode }: { encounter: DoctorQueueEncounter; mode: Mode }) {
+function QueueRow({
+    encounter,
+    mode,
+}: {
+    encounter: DoctorQueueEncounter;
+    mode: Mode;
+}) {
     return (
         <article className="grid gap-4 p-4 lg:grid-cols-[5rem_minmax(0,1fr)_11rem_auto] lg:items-center">
             <div className="bg-primary/10 text-primary flex h-14 items-center justify-center rounded-lg font-mono text-lg font-bold">
@@ -133,25 +162,33 @@ function QueueRow({ encounter, mode }: { encounter: DoctorQueueEncounter; mode: 
             </div>
             <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate font-semibold">{encounter.patient.name}</h2>
+                    <h2 className="truncate font-semibold">
+                        {encounter.patient.name}
+                    </h2>
                     {encounter.patient.allergies.length > 0 && (
-                        <span className="border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 rounded-full border dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                        <span className="rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                             Alergi: {encounter.patient.allergies.join(', ')}
                         </span>
                     )}
                 </div>
                 <p className="text-muted-foreground mt-1 text-xs">
-                    {encounter.patient.medical_record_number} · {age(encounter.patient.birth_date)} tahun ·{' '}
-                    {encounter.patient.gender === 'male' ? 'L' : 'P'} · {encounter.service_unit}
+                    {encounter.patient.medical_record_number} ·{' '}
+                    {age(encounter.patient.birth_date)} tahun ·{' '}
+                    {encounter.patient.gender === 'male' ? 'L' : 'P'} ·{' '}
+                    {encounter.service_unit}
                 </p>
-                <p className="mt-2 line-clamp-2 text-sm">{encounter.chief_complaint}</p>
+                <p className="mt-2 line-clamp-2 text-sm">
+                    {encounter.chief_complaint}
+                </p>
             </div>
             <div className="text-sm">
                 <p className="text-muted-foreground text-xs">
                     {mode === 'active' ? 'Mulai' : 'Terdaftar'}
                 </p>
                 <p className="mt-1 font-medium">
-                    {formatTime(encounter.started_at ?? encounter.registered_at)}
+                    {formatTime(
+                        encounter.started_at ?? encounter.registered_at,
+                    )}
                 </p>
                 {encounter.medical_record && (
                     <p className="text-muted-foreground mt-1 text-xs">
@@ -162,7 +199,9 @@ function QueueRow({ encounter, mode }: { encounter: DoctorQueueEncounter; mode: 
             <div className="flex justify-end">
                 {encounter.can_start ? (
                     <Button
-                        onClick={() => router.post(startConsultation.url(encounter.uuid))}
+                        onClick={() =>
+                            router.post(startConsultation.url(encounter.uuid))
+                        }
                     >
                         <Play /> Mulai Pemeriksaan
                     </Button>
@@ -178,7 +217,15 @@ function QueueRow({ encounter, mode }: { encounter: DoctorQueueEncounter; mode: 
     );
 }
 
-function SummaryCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function SummaryCard({
+    label,
+    value,
+    icon,
+}: {
+    label: string;
+    value: number;
+    icon: React.ReactNode;
+}) {
     return (
         <div className="bg-card flex items-center justify-between rounded-xl border p-4">
             <div>
@@ -196,10 +243,14 @@ function age(birthDate: string) {
     const birth = new Date(`${birthDate}T00:00:00`);
     const now = new Date();
     let result = now.getFullYear() - birth.getFullYear();
-    if (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate())) result--;
+    if (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate()))
+        result--;
     return result;
 }
 
 function formatTime(value: string) {
-    return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+    return new Intl.DateTimeFormat('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(new Date(value));
 }

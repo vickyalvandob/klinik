@@ -38,6 +38,29 @@ test('assigned doctor sees their queue and starts a consultation', function () {
         ->and($encounter->statusHistories()->withoutGlobalScopes()->count())->toBe(2);
 });
 
+test('owner sees the clinic medical record worklist without being able to edit as the assigned doctor', function () {
+    $context = createClinicWorkflow(SystemRole::OwnerAdmin, requireTriage: false);
+    $this->withSession(['current_clinic_id' => $context['clinic']->id]);
+    registerPatient($this, $context)->assertRedirect();
+    $encounter = Encounter::withoutGlobalScopes()->where('clinic_id', $context['clinic']->id)->sole();
+
+    $this->actingAs($context['user'])->get(route('doctor-queue.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('doctor-queue/index')
+            ->where('scope', 'clinic')
+            ->has('encounters.data', 1)
+            ->where('encounters.data.0.uuid', $encounter->uuid)
+            ->where('encounters.data.0.can_start', false));
+
+    $this->actingAs($context['user'])->get(route('medical-records.edit', $encounter))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('medical-records/edit')
+            ->where('can.save', false)
+            ->where('can.finalize', false));
+});
+
 test('doctor saves an audited draft with server-authoritative clinical snapshots', function () {
     $context = startedClinicalEncounter($this);
     $diagnosis = DiagnosisCatalog::factory()->create(['code' => 'J00', 'display' => 'Common cold']);

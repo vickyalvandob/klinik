@@ -21,7 +21,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { dashboard } from '@/routes';
-import { index, store, toggle, update } from '@/routes/master-data';
+import { index, overview, store, toggle, update } from '@/routes/master-data';
 
 type Field = {
     key: string;
@@ -420,7 +420,7 @@ function formatValue(
 
 MasterDataIndex.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
-        { title: 'Master Data', href: dashboard() },
+        { title: 'Dashboard', href: dashboard() },
+        { title: 'Master Data', href: overview() },
     ],
 };
