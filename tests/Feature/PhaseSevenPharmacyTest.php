@@ -1,8 +1,10 @@
 <?php
 
 use App\EncounterStatus;
+use App\InvoiceStatus;
 use App\MedicalRecordStatus;
 use App\Models\Encounter;
+use App\Models\Invoice;
 use App\Models\MedicalRecord;
 use App\Models\Medicine;
 use App\Models\MedicineStock;
@@ -69,6 +71,7 @@ test('dispensing decrements locked stock and advances encounter to billing', fun
         ->and($movement->quantity_before)->toBe('20.00')
         ->and($movement->quantity_after)->toBe('10.00')
         ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::WaitingPayment)
+        ->and(Invoice::withoutGlobalScopes()->sole()->total_amount)->toBe(10000)
         ->and(PrescriptionAudit::withoutGlobalScopes()->sole()->action)->toBe('dispensed');
 
     $this->actingAs($context['user'])
@@ -109,7 +112,9 @@ test('cancellation keeps the prescription history and requires a reason', functi
 
     expect($context['prescription']->refresh()->status)->toBe(PrescriptionStatus::Cancelled)
         ->and($context['prescription']->cancellation_reason)->toBe('Dokter mengonfirmasi obat tidak perlu diberikan.')
-        ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::WaitingPayment)
+        ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::Completed)
+        ->and(Invoice::withoutGlobalScopes()->sole()->status)->toBe(InvoiceStatus::Paid)
+        ->and(Invoice::withoutGlobalScopes()->sole()->total_amount)->toBe(0)
         ->and($context['stock']->refresh()->quantity)->toBe('20.00')
         ->and(StockMovement::withoutGlobalScopes()->count())->toBe(0)
         ->and(PrescriptionAudit::withoutGlobalScopes()->sole()->action)->toBe('cancelled');

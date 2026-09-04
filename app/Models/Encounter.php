@@ -127,6 +127,12 @@ class Encounter extends Model
         return $this->hasOne(Prescription::class);
     }
 
+    /** @return HasOne<Invoice, $this> */
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
+    }
+
     public function canTransitionTo(EncounterStatus $status): bool
     {
         return $this->status->canTransitionTo($status);

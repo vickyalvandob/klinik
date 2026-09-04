@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\EncounterStatus;
+use App\InvoiceStatus;
 use App\Models\Encounter;
 use App\Models\QueueEntry;
 use App\QueueStatus;
@@ -12,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class TransitionEncounter
 {
-    public function __construct(private readonly CurrentClinic $currentClinic) {}
+    public function __construct(
+        private readonly CurrentClinic $currentClinic,
+        private readonly GenerateInvoice $generateInvoice,
+    ) {}
 
     public function execute(
         Encounter $encounter,
@@ -61,6 +65,10 @@ class TransitionEncounter
                 $changes['completed_at'] = $lockedEncounter->completed_at ?? now();
             }
 
+            if ($toStatus === EncounterStatus::WaitingPayment) {
+                $changes['completed_at'] = null;
+            }
+
             $lockedEncounter->update($changes);
             $this->synchronizeQueue($lockedEncounter, $toStatus);
 
@@ -72,6 +80,19 @@ class TransitionEncounter
             ]);
             $history->clinic_id = $lockedEncounter->clinic_id;
             $history->save();
+
+            if ($toStatus === EncounterStatus::WaitingPayment) {
+                $invoice = $this->generateInvoice->execute($lockedEncounter, $userId);
+
+                if ($invoice->status === InvoiceStatus::Paid) {
+                    return $this->execute(
+                        $lockedEncounter,
+                        EncounterStatus::Completed,
+                        $userId,
+                        'Tidak ada biaya yang perlu dibayar',
+                    );
+                }
+            }
 
             return $lockedEncounter;
         }, attempts: 3);

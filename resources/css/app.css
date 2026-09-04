@@ -141,3 +141,20 @@
         @apply bg-background text-foreground antialiased;
     }
 }
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .billing-receipt,
+    .billing-receipt * {
+        visibility: visible;
+    }
+
+    .billing-receipt {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+    }
+}

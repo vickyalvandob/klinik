@@ -49,7 +49,8 @@ enum EncounterStatus: string
             self::InConsultation => [self::WaitingPharmacy, self::WaitingPayment, self::Completed],
             self::WaitingPharmacy => [self::WaitingPayment, self::Completed],
             self::WaitingPayment => [self::Completed],
-            self::Completed, self::Cancelled => [],
+            self::Completed => [self::WaitingPayment],
+            self::Cancelled => [],
         };
     }
 

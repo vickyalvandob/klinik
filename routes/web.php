@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ClinicalCatalogController;
 use App\Http\Controllers\ClinicController;
 use App\Http\Controllers\ClinicRoleController;
@@ -7,6 +8,8 @@ use App\Http\Controllers\ClinicUserController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\DoctorQueueController;
 use App\Http\Controllers\EncounterCancellationController;
+use App\Http\Controllers\InvoicePaymentController;
+use App\Http\Controllers\InvoiceVoidController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MasterDataOverviewController;
 use App\Http\Controllers\MedicalRecordAmendmentController;
@@ -15,6 +18,8 @@ use App\Http\Controllers\MedicineStockAdjustmentController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientDuplicateController;
+use App\Http\Controllers\PaymentReceiptController;
+use App\Http\Controllers\PaymentVoidController;
 use App\Http\Controllers\PharmacyController;
 use App\Http\Controllers\Platform\DashboardController as PlatformDashboardController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
@@ -84,6 +89,17 @@ Route::middleware(['auth', 'active', 'verified', 'clinic.context'])->group(funct
             ->name('pharmacy.cancellations.store');
         Route::post('pharmacy/stock/{medicine}/adjustment', MedicineStockAdjustmentController::class)
             ->name('pharmacy.stock.adjustments.store');
+
+        Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+        Route::get('billing/{invoice}', [BillingController::class, 'show'])->name('billing.show');
+        Route::post('billing/{invoice}/payments', InvoicePaymentController::class)
+            ->name('billing.payments.store');
+        Route::post('billing/{invoice}/void', InvoiceVoidController::class)
+            ->name('billing.void');
+        Route::post('billing/payments/{payment}/void', PaymentVoidController::class)
+            ->name('billing.payments.void');
+        Route::get('billing/{invoice}/receipts/{payment}', PaymentReceiptController::class)
+            ->name('billing.receipts.show');
 
         Route::get('clinics/{clinic}', [ClinicController::class, 'show'])->name('clinics.show');
         Route::get('clinics/{clinic}/edit', [ClinicController::class, 'edit'])->name('clinics.edit');

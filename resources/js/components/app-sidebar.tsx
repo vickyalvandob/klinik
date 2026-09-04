@@ -7,6 +7,7 @@ import {
     Database,
     KeyRound,
     Pill,
+    ReceiptText,
     Stethoscope,
     UserRoundCog,
     Workflow,
@@ -30,6 +31,7 @@ import { show as showClinic } from '@/routes/clinics';
 import { overview as masterDataOverview } from '@/routes/master-data';
 import { index as patientsIndex } from '@/routes/patients';
 import { index as pharmacyIndex } from '@/routes/pharmacy';
+import { index as billingIndex } from '@/routes/billing';
 import { create as registrationCreate } from '@/routes/registrations';
 import { index as triagesIndex } from '@/routes/triages';
 import { index as doctorQueueIndex } from '@/routes/doctor-queue';
@@ -88,6 +90,15 @@ export function AppSidebar() {
                       title: 'Apotek',
                       href: pharmacyIndex(),
                       icon: Pill,
+                  },
+              ]
+            : []),
+        ...(can('billing.view')
+            ? [
+                  {
+                      title: 'Kasir',
+                      href: billingIndex(),
+                      icon: ReceiptText,
                   },
               ]
             : []),

@@ -1,4 +1,5 @@
 export type * from './auth';
+export type * from './billing';
 export type * from './clinical';
 export type * from './encounter';
 export type * from './navigation';
