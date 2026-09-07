@@ -16,6 +16,7 @@ use App\PaymentStatus;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
 use App\SystemRole;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -98,7 +99,7 @@ test('full payment completes encounter and opens an authorized receipt', functio
             ->where('invoice.balance_due', 0));
 });
 
-test('partial payment follows clinic policy and never exceeds the balance', function () {
+test('partial payments retain the balance regardless of legacy settings and reject overpayment', function () {
     $context = billableEncounter($this);
 
     $this->actingAs($context['user'])
@@ -106,34 +107,52 @@ test('partial payment follows clinic policy and never exceeds the balance', func
         ->post(route('billing.payments.store', $context['invoice']), [
             'amount' => 40000,
             'method' => 'cash',
-        ])->assertSessionHasErrors([
-            'amount' => 'Klinik ini tidak mengizinkan pembayaran sebagian.',
-        ]);
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
-    expect(Payment::withoutGlobalScopes()->count())->toBe(0)
-        ->and($context['invoice']->refresh()->status)->toBe(InvoiceStatus::Issued);
-
-    $context['clinic']->workflowSetting()->update(['allow_partial_payment' => true]);
-
-    $this->actingAs($context['user'])
-        ->post(route('billing.payments.store', $context['invoice']), [
-            'amount' => 40000,
-            'method' => 'bank_transfer',
-            'reference_number' => 'TRX-001',
-        ])->assertRedirect();
-
-    expect($context['invoice']->refresh()->status)->toBe(InvoiceStatus::PartiallyPaid)
-        ->and($context['invoice']->paid_amount)->toBe(40000)
+    expect(Payment::withoutGlobalScopes()->count())->toBe(1)
+        ->and($context['invoice']->refresh()->status)->toBe(InvoiceStatus::PartiallyPaid)
         ->and($context['invoice']->balance_due)->toBe(60000)
         ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::WaitingPayment);
 
-    $this->actingAs($context['user'])
-        ->post(route('billing.payments.store', $context['invoice']), [
-            'amount' => 60001,
-            'method' => 'cash',
-        ])->assertSessionHasErrors(['amount' => 'Nominal melebihi sisa tagihan.']);
+    $context['clinic']->workflowSetting()->update(['allow_partial_payment' => true]);
+    $this->actingAs($context['user'])->post(route('billing.payments.store', $context['invoice']), [
+        'amount' => 40000, 'method' => 'bank_transfer', 'reference_number' => 'TRX-001',
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $this->actingAs($context['user'])->post(route('billing.payments.store', $context['invoice']), [
+        'amount' => 100001, 'method' => 'cash',
+    ])->assertSessionHasErrors(['amount' => 'Nominal melebihi sisa tagihan.']);
+    expect(Payment::withoutGlobalScopes()->count())->toBe(2);
+    expect($context['invoice']->refresh()->balance_due)->toBe(20000);
+});
 
-    expect(Payment::withoutGlobalScopes()->count())->toBe(1);
+test('mixed method payment is atomic and repeated submission does not charge twice', function () {
+    $context = billableEncounter($this);
+    $payload = ['payment_token' => (string) Str::uuid(), 'payments' => [
+        ['amount' => 40000, 'method' => 'cash'],
+        ['amount' => 60000, 'method' => 'bank_transfer', 'reference_number' => 'SPLIT-001'],
+    ]];
+
+    $this->actingAs($context['user'])->post(route('billing.payments.store', $context['invoice']), $payload)
+        ->assertSessionHasNoErrors()->assertRedirect(route('billing.show', $context['invoice']));
+    $this->post(route('billing.payments.store', $context['invoice']), $payload)
+        ->assertSessionHasNoErrors()->assertRedirect();
+
+    expect(Payment::withoutGlobalScopes()->count())->toBe(2)
+        ->and($context['invoice']->refresh()->balance_due)->toBe(0)
+        ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::Completed);
+});
+
+test('invalid mixed payments leave invoice payments and encounter unchanged', function () {
+    $context = billableEncounter($this);
+    $this->actingAs($context['user'])->post(route('billing.payments.store', $context['invoice']), [
+        'payment_token' => (string) Str::uuid(), 'payments' => [
+            ['amount' => 40000, 'method' => 'cash'], ['amount' => 60001, 'method' => 'bank_transfer'],
+        ],
+    ])->assertSessionHasErrors(['payments' => 'Total pembayaran melebihi sisa tagihan.']);
+
+    expect(Payment::withoutGlobalScopes()->count())->toBe(0)
+        ->and($context['invoice']->refresh()->balance_due)->toBe(100000)
+        ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::WaitingPayment);
 });
 
 test('void payment preserves the transaction and reopens a completed encounter', function () {

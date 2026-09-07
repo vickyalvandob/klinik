@@ -2,6 +2,8 @@
 
 return [
 
+    'history' => ['encrypt' => env('INERTIA_ENCRYPT_HISTORY', env('APP_ENV') === 'production')],
+
     /*
     |--------------------------------------------------------------------------
     | Server Side Rendering

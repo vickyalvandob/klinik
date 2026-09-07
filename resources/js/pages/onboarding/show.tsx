@@ -6,7 +6,6 @@ import {
     CircleUserRound,
     Stethoscope,
     Users,
-    Workflow,
 } from 'lucide-react';
 import { FormField } from '@/components/form-field';
 import { PageHeader } from '@/components/page-header';
@@ -21,7 +20,6 @@ import {
     services,
     show,
     users,
-    workflow,
 } from '@/routes/onboarding';
 
 type Clinic = {
@@ -41,17 +39,9 @@ type Readiness = {
     users: number;
     service_units: number;
     services: number;
-    workflow: boolean;
 };
 
-const steps = [
-    'Klinik',
-    'Dokter',
-    'Pengguna',
-    'Layanan',
-    'Workflow',
-    'Selesai',
-];
+const steps = ['Klinik', 'Dokter', 'Pengguna', 'Layanan', 'Selesai'];
 
 export default function OnboardingShow({
     step,
@@ -69,13 +59,13 @@ export default function OnboardingShow({
             <Head title="Onboarding Klinik" />
             <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6">
                 <PageHeader
-                    eyebrow={`Langkah ${step} dari 6`}
+                    eyebrow={`Langkah ${step} dari 5`}
                     title="Siapkan Klinik Anda"
-                    description="Lengkapi konfigurasi inti agar tim dapat bekerja tanpa mengubah database secara manual."
+                    description="Lengkapi data klinik, dokter, dan layanan agar tim siap bekerja."
                 />
 
                 <ol
-                    className="grid grid-cols-3 gap-2 sm:grid-cols-6"
+                    className="grid grid-cols-3 gap-2 sm:grid-cols-5"
                     aria-label="Progres onboarding"
                 >
                     {steps.map((label, index) => {
@@ -107,8 +97,7 @@ export default function OnboardingShow({
                 {step === 2 && <DoctorStep />}
                 {step === 3 && <UsersStep roles={roles} />}
                 {step === 4 && <ServicesStep />}
-                {step === 5 && <WorkflowStep />}
-                {step === 6 && <CompleteStep readiness={readiness} />}
+                {step === 5 && <CompleteStep readiness={readiness} />}
             </div>
         </>
     );
@@ -555,103 +544,19 @@ function ServicesStep() {
     );
 }
 
-function WorkflowStep() {
-    return (
-        <StepCard
-            icon={Workflow}
-            title="Workflow pelayanan"
-            description="Tentukan jam operasional dan jalur default pasien."
-        >
-            <Form
-                {...workflow.form()}
-                className="grid gap-4"
-                disableWhileProcessing
-            >
-                {({ errors, processing }) => (
-                    <>
-                        <div className="grid gap-4 sm:grid-cols-3">
-                            <FormField
-                                id="opening_time"
-                                label="Jam buka"
-                                error={errors.opening_time}
-                                required
-                            >
-                                <Input
-                                    id="opening_time"
-                                    name="opening_time"
-                                    type="time"
-                                    defaultValue="08:00"
-                                />
-                            </FormField>
-                            <FormField
-                                id="closing_time"
-                                label="Jam tutup"
-                                error={errors.closing_time}
-                                required
-                            >
-                                <Input
-                                    id="closing_time"
-                                    name="closing_time"
-                                    type="time"
-                                    defaultValue="17:00"
-                                />
-                            </FormField>
-                            <FormField
-                                id="default_visit_duration_minutes"
-                                label="Durasi kunjungan"
-                                error={errors.default_visit_duration_minutes}
-                                required
-                            >
-                                <Input
-                                    id="default_visit_duration_minutes"
-                                    name="default_visit_duration_minutes"
-                                    type="number"
-                                    min={5}
-                                    step={5}
-                                    defaultValue={20}
-                                />
-                            </FormField>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <OnboardingToggle
-                                name="require_triage"
-                                label="Wajib triase"
-                            />
-                            <OnboardingToggle
-                                name="allow_walk_in"
-                                label="Izinkan pasien walk-in"
-                            />
-                            <OnboardingToggle
-                                name="pharmacy_enabled"
-                                label="Aktifkan alur farmasi"
-                            />
-                            <OnboardingToggle
-                                name="auto_send_prescription_to_pharmacy"
-                                label="Kirim resep otomatis ke farmasi"
-                            />
-                        </div>
-                        <NextButton processing={processing} />
-                    </>
-                )}
-            </Form>
-        </StepCard>
-    );
-}
-
 function CompleteStep({ readiness }: { readiness: Readiness }) {
     const checks = [
         ['Dokter aktif', readiness.practitioners > 0],
         ['Pengguna dapat login', readiness.users > 0],
         ['Unit layanan tersedia', readiness.service_units > 0],
         ['Layanan dan tarif tersedia', readiness.services > 0],
-        ['Workflow tersimpan', readiness.workflow],
     ] as Array<[string, boolean]>;
 
     return (
         <StepCard
             icon={Check}
             title="Klinik siap digunakan"
-            description="Konfigurasi inti sudah tersimpan. Anda tetap dapat mengubah semuanya dari menu Pengelolaan."
+            description="Data inti tersedia. Alur layanan berlaku otomatis: pendaftaran, pemeriksaan awal, dokter, apotek bila ada resep, lalu kasir."
         >
             <div className="grid gap-2 sm:grid-cols-2">
                 {checks.map(([label, ready]) => (
@@ -712,22 +617,6 @@ function NextButton({ processing }: { processing: boolean }) {
                 {processing ? <Spinner /> : <ChevronRight />} Simpan & Lanjutkan
             </Button>
         </div>
-    );
-}
-
-function OnboardingToggle({ name, label }: { name: string; label: string }) {
-    return (
-        <label className="flex items-center gap-3 rounded-lg border p-4 text-sm font-medium">
-            <input type="hidden" name={name} value="0" />
-            <input
-                type="checkbox"
-                name={name}
-                value="1"
-                defaultChecked
-                className="accent-primary size-4"
-            />
-            {label}
-        </label>
     );
 }
 

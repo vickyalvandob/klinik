@@ -157,7 +157,7 @@ function Contact({
 
 ClinicShow.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Klinik', href: dashboard() },
     ],
 };

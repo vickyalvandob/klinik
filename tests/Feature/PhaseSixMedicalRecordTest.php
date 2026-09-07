@@ -35,14 +35,15 @@ test('assigned doctor sees their queue and starts a consultation', function () {
 
     expect($encounter->refresh()->status)->toBe(EncounterStatus::InConsultation)
         ->and($encounter->started_at)->not->toBeNull()
-        ->and($encounter->statusHistories()->withoutGlobalScopes()->count())->toBe(2);
+        ->and($encounter->statusHistories()->withoutGlobalScopes()->count())->toBe(3);
 });
 
-test('owner sees the clinic medical record worklist without being able to edit as the assigned doctor', function () {
+test('owner manages clinical records without a practitioner link and preserves the responsible doctor', function () {
     $context = createClinicWorkflow(SystemRole::OwnerAdmin, requireTriage: false);
     $this->withSession(['current_clinic_id' => $context['clinic']->id]);
     registerPatient($this, $context)->assertRedirect();
     $encounter = Encounter::withoutGlobalScopes()->where('clinic_id', $context['clinic']->id)->sole();
+    $this->actingAs($context['user'])->put(route('triages.update', $encounter), ['intent' => 'complete', 'chief_complaint' => 'Keluhan untuk konsultasi'])->assertRedirect();
 
     $this->actingAs($context['user'])->get(route('doctor-queue.index'))
         ->assertOk()
@@ -51,14 +52,31 @@ test('owner sees the clinic medical record worklist without being able to edit a
             ->where('scope', 'clinic')
             ->has('encounters.data', 1)
             ->where('encounters.data.0.uuid', $encounter->uuid)
-            ->where('encounters.data.0.can_start', false));
+            ->where('encounters.data.0.can_start', true));
+
+    $this->actingAs($context['user'])->post(route('consultations.store', $encounter))->assertRedirect();
 
     $this->actingAs($context['user'])->get(route('medical-records.edit', $encounter))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('medical-records/edit')
-            ->where('can.save', false)
-            ->where('can.finalize', false));
+            ->where('can.save', true)
+            ->where('can.finalize', true));
+
+    $diagnosis = DiagnosisCatalog::factory()->create();
+    $this->put(route('medical-records.update', $encounter), [
+        'intent' => 'finalize', 'subjective' => 'Kontrol', 'assessment' => 'Stabil', 'plan' => 'Observasi',
+        'diagnoses' => [['catalog_id' => $diagnosis->uuid, 'type' => 'primary']],
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    $record = MedicalRecord::withoutGlobalScopes()->where('encounter_id', $encounter->id)->sole();
+    expect($record->practitioner_id)->toBe($context['practitioner']->id)
+        ->and($record->finalized_by)->toBe($context['user']->id)
+        ->and($record->status)->toBe(MedicalRecordStatus::Final);
+    $this->post(route('medical-record-amendments.store', $record), [
+        'reason' => 'Tambahan hasil pemeriksaan', 'content' => 'Kondisi pasien stabil.',
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    expect($record->refresh()->status)->toBe(MedicalRecordStatus::Amended);
 });
 
 test('doctor saves an audited draft with server-authoritative clinical snapshots', function () {
@@ -101,8 +119,9 @@ test('doctor saves an audited draft with server-authoritative clinical snapshots
         ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::InConsultation);
 });
 
-test('finalization requires complete soap and exactly one primary diagnosis', function () {
+test('finalization requires complete soap and exactly one primary diagnosis even with legacy options disabled', function () {
     $context = startedClinicalEncounter($this);
+    $context['clinic']->workflowSetting()->update(['require_primary_diagnosis' => false, 'require_final_medical_record' => false]);
 
     $this->actingAs($context['user'])->put(route('medical-records.update', $context['encounter']), [
         'intent' => 'finalize',
@@ -122,6 +141,7 @@ test('finalization requires complete soap and exactly one primary diagnosis', fu
 
 test('finalization locks the record and routes a prescription to pharmacy', function () {
     $context = startedClinicalEncounter($this);
+    $context['clinic']->workflowSetting()->update(['pharmacy_enabled' => false, 'billing_enabled' => false]);
     $diagnosis = DiagnosisCatalog::factory()->create(['code' => 'R50.9', 'display' => 'Fever, unspecified']);
     $service = ClinicService::factory()->create([
         'tenant_id' => $context['tenant']->id,
@@ -213,6 +233,8 @@ function clinicalEncounter(TestCase $testCase): array
     $context = createClinicWorkflow(SystemRole::OwnerAdmin, requireTriage: false);
     $testCase->withSession(['current_clinic_id' => $context['clinic']->id]);
     registerPatient($testCase, $context)->assertRedirect();
+    $triageEncounter = Encounter::withoutGlobalScopes()->where('clinic_id', $context['clinic']->id)->sole();
+    $testCase->actingAs($context['user'])->put(route('triages.update', $triageEncounter), ['intent' => 'complete', 'chief_complaint' => 'Keluhan untuk konsultasi'])->assertRedirect();
     $doctorRoleId = (int) Role::query()->where('code', SystemRole::Doctor->value)->value('id');
     $context['membership']->forceFill([
         'role_id' => $doctorRoleId,

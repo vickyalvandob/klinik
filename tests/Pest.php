@@ -3,7 +3,12 @@
 use App\Actions\SyncAuthorizationCatalog;
 use App\Models\Clinic;
 use App\Models\ClinicMembership;
+use App\Models\ClinicService;
 use App\Models\ClinicWorkflowSetting;
+use App\Models\DiagnosisCatalog;
+use App\Models\Encounter;
+use App\Models\Invoice;
+use App\Models\MedicalRecord;
 use App\Models\Patient;
 use App\Models\Practitioner;
 use App\Models\Role;
@@ -157,4 +162,30 @@ function registerPatient(TestCase $test, array $context): TestResponse
         'practitioner_id' => $context['practitioner']->uuid,
         'chief_complaint' => 'Keluhan pasien untuk pemeriksaan',
     ]);
+}
+
+/** @return array<string, mixed> */
+function createFinalizedVisit(TestCase $test): array
+{
+    $context = createClinicWorkflow();
+    $test->withSession(['current_clinic_id' => $context['clinic']->id]);
+    registerPatient($test, $context)->assertSessionHasNoErrors();
+    $encounter = Encounter::withoutGlobalScopes()->where('clinic_id', $context['clinic']->id)->sole();
+    $test->put(route('triages.update', $encounter), ['intent' => 'complete', 'chief_complaint' => 'Kontrol'])
+        ->assertSessionHasNoErrors();
+    $test->post(route('consultations.store', $encounter))->assertRedirect();
+    $diagnosis = DiagnosisCatalog::factory()->create();
+    $service = ClinicService::factory()->create([
+        'tenant_id' => $context['tenant']->id, 'clinic_id' => $context['clinic']->id,
+        'service_unit_id' => $context['serviceUnit']->id, 'name' => 'Konsultasi', 'price' => 100000,
+    ]);
+    $test->put(route('medical-records.update', $encounter), [
+        'intent' => 'finalize', 'subjective' => 'Kontrol privat', 'assessment' => 'Kondisi stabil', 'plan' => 'Observasi',
+        'diagnoses' => [['catalog_id' => $diagnosis->uuid, 'type' => 'primary']],
+        'procedures' => [['service_id' => $service->uuid]],
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $record = MedicalRecord::withoutGlobalScopes()->where('encounter_id', $encounter->id)->sole();
+    $invoice = Invoice::withoutGlobalScopes()->where('encounter_id', $encounter->id)->sole();
+
+    return [...$context, 'encounter' => $encounter, 'record' => $record, 'invoice' => $invoice, 'diagnosis' => $diagnosis];
 }

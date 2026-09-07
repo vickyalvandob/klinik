@@ -37,7 +37,7 @@ class DoctorQueueController extends Controller
 
         $encounters = Encounter::query()
             ->where('clinic_id', $clinic->id)
-            ->when($mode !== 'history', fn (Builder $query) => $query->whereDate('encounter_date', $today))
+            ->when($mode !== 'history', fn (Builder $query) => $query->whereDate('encounter_date', '<=', $today))
             ->when(
                 ! $seesAllPractitioners,
                 fn (Builder $query) => $practitioner === null
@@ -90,7 +90,7 @@ class DoctorQueueController extends Controller
 
         $baseQuery = fn (): Builder => Encounter::query()
             ->where('clinic_id', $clinic->id)
-            ->whereDate('encounter_date', $today)
+            ->whereDate('encounter_date', '<=', $today)
             ->when(
                 ! $seesAllPractitioners,
                 fn (Builder $query) => $practitioner === null

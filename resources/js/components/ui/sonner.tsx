@@ -12,6 +12,12 @@ function Toaster({ ...props }: ToasterProps) {
             theme={appearance}
             className="toaster group"
             position="bottom-right"
+            closeButton
+            richColors
+            duration={4500}
+            gap={8}
+            mobileOffset={16}
+            toastOptions={{ style: { boxShadow: 'none' }, classNames: { toast: 'rounded-xl border font-sans', description: 'text-xs leading-relaxed', closeButton: 'bg-background border-border' } }}
             style={
                 {
                     '--normal-bg': 'var(--popover)',

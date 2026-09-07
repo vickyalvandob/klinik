@@ -12,17 +12,20 @@ use App\Models\Encounter;
 use App\Models\EncounterProcedure;
 use App\Models\MedicalRecord;
 use App\Models\MedicalRecordAmendment;
+use App\Models\MedicalRecordFile;
 use App\Models\Medicine;
 use App\Models\PrescriptionItem;
 use App\Models\User;
+use App\Services\ClinicalAccessRecorder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class MedicalRecordController extends Controller
 {
-    public function edit(Encounter $encounter): Response
+    public function edit(Encounter $encounter, Request $request, ClinicalAccessRecorder $accessRecorder): Response
     {
         Gate::authorize('viewEncounter', [MedicalRecord::class, $encounter]);
 
@@ -43,6 +46,8 @@ class MedicalRecordController extends Controller
             'medicalRecord.amendments' => fn ($query) => $query->with('creator:id,name')->oldest(),
         ]);
 
+        $accessRecorder->record($encounter, $request);
+
         $previousEncounters = Encounter::query()
             ->where('clinic_id', $encounter->clinic_id)
             ->where('patient_id', $encounter->patient_id)
@@ -61,6 +66,7 @@ class MedicalRecordController extends Controller
             ->orderByDesc('id')
             ->limit(5)
             ->get()
+            ->each(fn (Encounter $previous) => $accessRecorder->record($previous, $request, 'history_view'))
             ->map(fn (Encounter $previous): array => [
                 'date' => $previous->encounter_date->toDateString(),
                 'doctor' => $previous->practitioner->staffProfile->name,
@@ -77,6 +83,9 @@ class MedicalRecordController extends Controller
         return Inertia::render('medical-records/edit', [
             'encounter' => $this->encounterData($encounter),
             'previousEncounters' => $previousEncounters,
+            'files' => $encounter->medicalRecord === null ? [] : MedicalRecordFile::query()
+                ->where('clinic_id', $encounter->clinic_id)->where('medical_record_id', $encounter->medicalRecord->id)
+                ->latest('id')->get(['uuid', 'original_name', 'size', 'created_at']),
             'can' => [
                 'start' => Gate::allows('start', [MedicalRecord::class, $encounter]),
                 'save' => Gate::allows('save', [MedicalRecord::class, $encounter]),

@@ -1,41 +1,24 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import {
-    Ban,
-    Banknote,
-    Clock3,
-    Printer,
-    ReceiptText,
-    UserRound,
-} from 'lucide-react';
-import { FormField } from '@/components/form-field';
+import { Ban, Clock3, Printer, UserRound } from 'lucide-react';
+import { PaymentForm } from '@/components/payment-form';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { dashboard } from '@/routes';
 import { index, voidMethod as voidInvoice } from '@/routes/billing';
-import {
-    store as receivePayment,
-    voidMethod as voidPayment,
-} from '@/routes/billing/payments';
+import { voidMethod as voidPayment } from '@/routes/billing/payments';
 import { show as showReceipt } from '@/routes/billing/receipts';
 import type { BillingInvoice } from '@/types';
 
 export default function BillingShow({
     invoice,
-    allowPartialPayment,
+    paymentToken,
     paymentMethods,
     can,
 }: {
     invoice: BillingInvoice;
-    allowPartialPayment: boolean;
+    paymentToken: string;
     paymentMethods: Array<{ value: string; label: string }>;
     can: { receivePayment: boolean; voidInvoice: boolean };
 }) {
@@ -169,115 +152,12 @@ export default function BillingShow({
 
                     <aside className="grid content-start gap-4">
                         {can.receivePayment && (
-                            <section className="bg-card rounded-xl border p-4">
-                                <div className="flex items-center gap-2">
-                                    <Banknote className="text-primary size-4" />
-                                    <h2 className="text-sm font-semibold">
-                                        Terima Pembayaran
-                                    </h2>
-                                </div>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {allowPartialPayment
-                                        ? 'Pembayaran sebagian diizinkan. Pastikan nominal tidak melebihi sisa.'
-                                        : 'Klinik mewajibkan pembayaran penuh.'}
-                                </p>
-                                <Form
-                                    {...receivePayment.form(invoice.uuid)}
-                                    className="mt-4 grid gap-3"
-                                    disableWhileProcessing
-                                >
-                                    {({ errors, processing }) => (
-                                        <>
-                                            <FormField
-                                                id="amount"
-                                                label="Nominal pembayaran"
-                                                error={errors.amount}
-                                                required
-                                            >
-                                                <Input
-                                                    id="amount"
-                                                    name="amount"
-                                                    type="number"
-                                                    min={1}
-                                                    max={invoice.balance_due}
-                                                    step={1}
-                                                    defaultValue={
-                                                        invoice.balance_due
-                                                    }
-                                                />
-                                            </FormField>
-                                            <FormField
-                                                id="method"
-                                                label="Metode"
-                                                error={errors.method}
-                                                required
-                                            >
-                                                <Select
-                                                    name="method"
-                                                    defaultValue={
-                                                        paymentMethods[0]?.value
-                                                    }
-                                                >
-                                                    <SelectTrigger
-                                                        id="method"
-                                                        className="w-full"
-                                                    >
-                                                        <SelectValue placeholder="Pilih metode" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {paymentMethods.map(
-                                                            (method) => (
-                                                                <SelectItem
-                                                                    key={
-                                                                        method.value
-                                                                    }
-                                                                    value={
-                                                                        method.value
-                                                                    }
-                                                                >
-                                                                    {
-                                                                        method.label
-                                                                    }
-                                                                </SelectItem>
-                                                            ),
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormField>
-                                            <FormField
-                                                id="reference_number"
-                                                label="Nomor referensi"
-                                                description="Opsional untuk transfer atau kartu."
-                                                error={errors.reference_number}
-                                            >
-                                                <Input
-                                                    id="reference_number"
-                                                    name="reference_number"
-                                                />
-                                            </FormField>
-                                            <FormField
-                                                id="notes"
-                                                label="Catatan"
-                                                error={errors.notes}
-                                            >
-                                                <textarea
-                                                    id="notes"
-                                                    name="notes"
-                                                    rows={3}
-                                                    className="border-input focus-visible:border-ring focus-visible:ring-ring/50 min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
-                                                />
-                                            </FormField>
-                                            <Button
-                                                type="submit"
-                                                disabled={processing}
-                                            >
-                                                <ReceiptText /> Simpan & Buka
-                                                Struk
-                                            </Button>
-                                        </>
-                                    )}
-                                </Form>
-                            </section>
+                            <PaymentForm
+                                key={paymentToken}
+                                invoice={invoice}
+                                paymentToken={paymentToken}
+                                paymentMethods={paymentMethods}
+                            />
                         )}
 
                         <section className="bg-card rounded-xl border p-4">
@@ -554,7 +434,7 @@ function auditLabel(action: string) {
 
 BillingShow.layout = {
     breadcrumbs: [
-        { title: 'Dashboard', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Kasir & Billing', href: index() },
         { title: 'Detail Tagihan', href: index() },
     ],

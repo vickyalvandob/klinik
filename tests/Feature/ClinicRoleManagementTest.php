@@ -26,6 +26,10 @@ test('an owner can customize a clinic role without changing global presets', fun
     expect($clinicRole->permissions()->pluck('key')->all())->toBe(['patient.view'])
         ->and($doctorRole->permissions()->where('key', 'medical_record.finalize')->exists())->toBeTrue();
 
+    $this->get(route('clinic-users.index'))->assertInertia(fn ($page) => $page
+        ->where('roles.3.code', SystemRole::Doctor->value)
+        ->where('roles.3.permissions', ['patient.view']));
+
     $doctor = User::factory()->create();
     $doctorMembership = ClinicMembership::factory()
         ->forClinic($clinic)

@@ -327,7 +327,7 @@ function formatDate(value: string) {
 
 BillingIndex.layout = {
     breadcrumbs: [
-        { title: 'Dashboard', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Kasir & Billing', href: index() },
     ],
 };

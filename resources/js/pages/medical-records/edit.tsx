@@ -13,7 +13,22 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FormField } from '@/components/form-field';
+import {
+    MedicalRecordFiles,
+    type ClinicalFile,
+} from '@/components/medical-record-files';
 import { Button } from '@/components/ui/button';
+import {
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { show as clinicalCatalog } from '@/routes/clinical-catalog';
@@ -49,14 +64,17 @@ type ClinicalFormData = {
 export default function MedicalRecordEdit({
     encounter,
     previousEncounters,
+    files,
     can,
 }: {
     encounter: ClinicalEncounter;
     previousEncounters: PreviousEncounter[];
+    files: ClinicalFile[];
     can: { start: boolean; save: boolean; finalize: boolean; amend: boolean };
 }) {
     const record = encounter.medical_record;
     const locked = record?.status === 'final' || record?.status === 'amended';
+    const [confirmFinalization, setConfirmFinalization] = useState(false);
     const form = useForm<ClinicalFormData>({
         intent: 'draft',
         subjective: record?.subjective ?? '',
@@ -73,18 +91,12 @@ export default function MedicalRecordEdit({
     });
 
     const submit = (intent: 'draft' | 'finalize') => {
-        if (
-            intent === 'finalize' &&
-            !window.confirm(
-                'Finalisasi akan mengunci rekam medis. Pastikan seluruh data sudah benar.',
-            )
-        ) {
-            return;
-        }
-
+        if (form.processing) return;
         form.transform((data) => ({ ...data, intent }));
         form.put(update.url(encounter.uuid), {
             preserveScroll: intent === 'draft',
+            onSuccess: () => setConfirmFinalization(false),
+            onError: () => setConfirmFinalization(false),
         });
     };
 
@@ -488,6 +500,14 @@ export default function MedicalRecordEdit({
                             />
                         </Section>
 
+                        {record && (
+                            <MedicalRecordFiles
+                                recordId={record.uuid}
+                                files={files}
+                                canUpload={can.save || can.amend}
+                            />
+                        )}
+
                         {record && locked && (
                             <AmendmentSection
                                 record={record}
@@ -503,8 +523,8 @@ export default function MedicalRecordEdit({
                 </div>
 
                 {can.save && !locked && (
-                    <div className="bg-background/95 fixed right-0 bottom-0 left-0 z-30 border-t px-4 py-3 backdrop-blur md:px-6 lg:left-[var(--sidebar-width)]">
-                        <div className="ml-auto flex max-w-7xl flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <div className="bg-background/95 sticky bottom-0 z-30 -mb-24 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:px-6">
+                        <div className="ml-auto grid max-w-7xl grid-cols-2 gap-2 sm:flex sm:justify-end">
                             <Button
                                 variant="outline"
                                 onClick={() => submit('draft')}
@@ -513,12 +533,65 @@ export default function MedicalRecordEdit({
                                 {form.processing ? <Spinner /> : <Save />}{' '}
                                 Simpan Draft
                             </Button>
-                            <Button
-                                onClick={() => submit('finalize')}
-                                disabled={form.processing || !can.finalize}
+                            <AlertDialog
+                                open={confirmFinalization}
+                                onOpenChange={(open) => {
+                                    if (!form.processing)
+                                        setConfirmFinalization(open);
+                                }}
                             >
-                                <LockKeyhole /> Finalisasi RME
-                            </Button>
+                                <AlertDialogTrigger asChild>
+                                    <Button
+                                        disabled={
+                                            form.processing || !can.finalize
+                                        }
+                                    >
+                                        <LockKeyhole /> Finalisasi RME
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <span className="bg-primary/10 text-primary mb-2 grid size-11 place-items-center rounded-xl">
+                                            <LockKeyhole className="size-5" />
+                                        </span>
+                                        <AlertDialogTitle>
+                                            Finalisasi rekam medis?
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Rekam medis {encounter.patient.name}{' '}
+                                            akan dikunci dan pasien diteruskan
+                                            ke layanan berikutnya. Perubahan
+                                            setelah ini dicatat melalui koreksi
+                                            rekam medis.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <div className="bg-muted/40 rounded-lg border p-3 text-sm">
+                                        Pastikan SOAP, diagnosis, tindakan, dan
+                                        resep sudah sesuai.
+                                    </div>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel
+                                            disabled={form.processing}
+                                        >
+                                            Periksa Kembali
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                            disabled={form.processing}
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                submit('finalize');
+                                            }}
+                                        >
+                                            {form.processing ? (
+                                                <Spinner />
+                                            ) : (
+                                                <LockKeyhole />
+                                            )}{' '}
+                                            Ya, Finalisasi
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                     </div>
                 )}
@@ -535,7 +608,7 @@ function PatientHeader({
     locked: boolean;
 }) {
     return (
-        <header className="bg-background/95 sticky top-0 z-20 border-b px-4 py-3 backdrop-blur md:px-6">
+        <header className="bg-background border-b px-4 py-4 md:px-6">
             <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
                     <Button asChild variant="ghost" size="icon">

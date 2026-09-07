@@ -1,0 +1,90 @@
+import { Form } from '@inertiajs/react';
+import { Paperclip, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { store, show } from '@/routes/medical-record-files';
+
+export type ClinicalFile = {
+    uuid: string;
+    original_name: string;
+    size: number;
+    created_at: string;
+};
+export function MedicalRecordFiles({
+    recordId,
+    files,
+    canUpload,
+}: {
+    recordId: string;
+    files: ClinicalFile[];
+    canUpload: boolean;
+}) {
+    return (
+        <section className="bg-card grid gap-4 rounded-xl border p-4 md:p-5">
+            <div>
+                <h2 className="flex items-center gap-2 font-semibold">
+                    <Paperclip className="size-4" /> Lampiran rekam medis
+                </h2>
+                <p className="text-muted-foreground mt-1 text-xs">
+                    PDF, JPG, atau PNG, maksimal 5 MB. Hanya petugas dengan
+                    akses RME yang dapat mengunduh.
+                </p>
+            </div>
+            {files.length === 0 && (
+                <p className="text-muted-foreground text-sm">
+                    Belum ada lampiran.
+                </p>
+            )}
+            {files.map((file) => (
+                <a
+                    key={file.uuid}
+                    href={show.url(file.uuid)}
+                    className="hover:bg-accent flex items-center gap-3 rounded-lg border p-3 text-sm"
+                >
+                    <Download className="size-4 shrink-0" />
+                    <span className="min-w-0 flex-1 break-words">
+                        {file.original_name}
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                        {Math.ceil(file.size / 1024)} KB
+                    </span>
+                </a>
+            ))}
+            {canUpload && (
+                <Form
+                    {...store.form(recordId)}
+                    resetOnSuccess
+                    className="grid gap-3"
+                >
+                    {({ errors, processing }) => (
+                        <>
+                            <Input
+                                type="file"
+                                name="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                aria-label="Pilih lampiran rekam medis"
+                                required
+                            />
+                            {errors.file && (
+                                <p
+                                    role="alert"
+                                    className="text-destructive text-sm"
+                                >
+                                    {errors.file}
+                                </p>
+                            )}
+                            <Button
+                                type="submit"
+                                variant="outline"
+                                disabled={processing}
+                                className="justify-self-start"
+                            >
+                                {processing ? 'Mengunggah…' : 'Unggah lampiran'}
+                            </Button>
+                        </>
+                    )}
+                </Form>
+            )}
+        </section>
+    );
+}

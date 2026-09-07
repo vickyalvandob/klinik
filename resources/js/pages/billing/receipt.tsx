@@ -42,7 +42,7 @@ export default function BillingReceipt({
     return (
         <>
             <Head title={`Struk ${payment.payment_number}`} />
-            <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+            <div className="flex flex-1 flex-col gap-4 p-4 md:p-6 print:p-0">
                 <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
                     <Button asChild variant="outline">
                         <Link href={showInvoice(invoice.uuid)}>
@@ -54,7 +54,7 @@ export default function BillingReceipt({
                     </Button>
                 </div>
 
-                <article className="billing-receipt bg-card mx-auto w-full max-w-2xl rounded-xl border p-5 text-sm md:p-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black">
+                <article className="print-document bg-card mx-auto w-full max-w-2xl rounded-xl border p-5 text-sm md:p-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black">
                     <header className="border-b pb-5 text-center">
                         <h1 className="text-xl font-semibold">{clinic.name}</h1>
                         {clinic.address && (

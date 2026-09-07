@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\HasUuid;
+use App\Support\Authorization\PermissionCatalog;
+use App\SystemRole;
 use Database\Factories\ClinicMembershipFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -59,6 +61,14 @@ class ClinicMembership extends Model
 
     public function grantsPermission(string $permission): bool
     {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        if ($this->role->code === SystemRole::OwnerAdmin->value) {
+            return array_key_exists($permission, PermissionCatalog::permissions());
+        }
+
         $clinicRole = $this->relationLoaded('clinicRole')
             ? $this->getRelation('clinicRole')
             : ClinicRole::query()

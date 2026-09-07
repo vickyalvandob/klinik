@@ -361,7 +361,7 @@ function formatDateTime(value: string | null) {
 
 PharmacyIndex.layout = {
     breadcrumbs: [
-        { title: 'Dashboard', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Apotek', href: index() },
     ],
 };

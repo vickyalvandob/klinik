@@ -16,7 +16,7 @@ test('front office registration creates a triage encounter, queue, and status au
         'service_unit_id' => $context['serviceUnit']->uuid,
         'practitioner_id' => $context['practitioner']->uuid,
         'chief_complaint' => 'Demam sejak dua hari',
-    ])->assertRedirect(route('dashboard'));
+    ])->assertRedirect(route('registrations.index'));
 
     $encounter = Encounter::withoutGlobalScopes()->sole();
     $queue = QueueEntry::withoutGlobalScopes()->sole();
@@ -32,13 +32,13 @@ test('front office registration creates a triage encounter, queue, and status au
         ->and($history->to_status)->toBe(EncounterStatus::WaitingTriage);
 });
 
-test('registration skips triage when the clinic workflow disables it', function () {
+test('registration requires triage even when legacy settings disable it', function () {
     $context = createClinicWorkflow(SystemRole::FrontOffice, requireTriage: false);
 
-    registerPatient($this, $context)->assertRedirect(route('dashboard'));
+    registerPatient($this, $context)->assertRedirect(route('registrations.index'));
 
     expect(Encounter::withoutGlobalScopes()->sole()->status)
-        ->toBe(EncounterStatus::WaitingDoctor);
+        ->toBe(EncounterStatus::WaitingTriage);
 });
 
 test('registration rejects foreign patient, unit, and practitioner identifiers', function () {
@@ -87,15 +87,15 @@ test('a completed visit does not block a legitimate second encounter on the same
             ->all())->toBe(['A001', 'A002']);
 });
 
-test('the today worklist supports scoped search and operational summaries', function () {
+test('the registration worklist supports scoped search and operational summaries', function () {
     $context = createClinicWorkflow(SystemRole::FrontOffice);
     $context['patient']->forceFill(['name' => 'Budi Antrean'])->save();
     registerPatient($this, $context)->assertRedirect();
 
-    $this->actingAs($context['user'])->get(route('dashboard', ['search' => 'Budi']))
+    $this->actingAs($context['user'])->get(route('registrations.index', ['search' => 'Budi']))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('today/index')
+            ->component('registrations/index')
             ->where('summary.total', 1)
             ->where('summary.waiting', 1)
             ->has('encounters.data', 1)

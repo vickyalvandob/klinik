@@ -16,11 +16,9 @@ class StartConsultation
 
     public function execute(Encounter $encounter, int $userId): Encounter
     {
-        $practitioner = $this->currentPractitioner->find();
-
-        if ($practitioner === null || $practitioner->id !== $encounter->practitioner_id) {
+        if (! $this->currentPractitioner->canManage($encounter)) {
             throw ValidationException::withMessages([
-                'encounter' => 'Kunjungan hanya dapat dimulai oleh dokter yang ditugaskan.',
+                'encounter' => 'Kunjungan hanya dapat dimulai oleh dokter yang ditugaskan atau owner klinik.',
             ]);
         }
 

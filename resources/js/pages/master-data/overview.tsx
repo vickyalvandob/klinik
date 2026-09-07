@@ -69,7 +69,7 @@ export default function MasterDataOverview({
 
 MasterDataOverview.layout = {
     breadcrumbs: [
-        { title: 'Dashboard', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Master Data', href: overview() },
     ],
 };

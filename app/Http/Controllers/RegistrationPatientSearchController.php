@@ -38,7 +38,7 @@ class RegistrationPatientSearchController extends Controller
             ->orderBy('name')
             ->orderBy('id')
             ->limit(8)
-            ->get()
+            ->get(['uuid', 'medical_record_number', 'name', 'birth_date', 'gender', 'national_id_number', 'phone'])
             ->map(fn (Patient $patient): array => PatientData::registrationOption($patient));
 
         return response()->json(['patients' => $patients]);

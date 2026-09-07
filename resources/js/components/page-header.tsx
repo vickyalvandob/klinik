@@ -19,22 +19,22 @@ export function PageHeader({
     return (
         <header
             className={cn(
-                'flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between',
+                'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
                 className,
             )}
             {...props}
         >
             <div className="min-w-0">
                 {eyebrow && (
-                    <p className="text-primary text-sm font-medium">
+                    <p className="text-muted-foreground mb-1.5 text-xs">
                         {eyebrow}
                     </p>
                 )}
-                <h1 className="text-2xl font-semibold tracking-tight text-balance">
+                <h1 className="text-xl font-semibold tracking-tight text-balance sm:text-[1.625rem]">
                     {title}
                 </h1>
                 {description && (
-                    <p className="text-muted-foreground mt-1 max-w-2xl text-sm text-pretty">
+                    <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed text-pretty">
                         {description}
                     </p>
                 )}

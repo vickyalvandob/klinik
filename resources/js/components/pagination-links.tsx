@@ -8,7 +8,15 @@ export type PaginationLink = {
     active: boolean;
 };
 
-export function PaginationLinks({ links }: { links: PaginationLink[] }) {
+export function PaginationLinks({
+    links,
+    only,
+    preserveState = false,
+}: {
+    links: PaginationLink[];
+    only?: string[];
+    preserveState?: boolean;
+}) {
     if (links.length <= 3) {
         return null;
     }
@@ -31,7 +39,12 @@ export function PaginationLinks({ links }: { links: PaginationLink[] }) {
                         disabled={link.url === null}
                     >
                         {link.url ? (
-                            <Link href={link.url} preserveScroll>
+                            <Link
+                                href={link.url}
+                                preserveScroll
+                                only={only}
+                                preserveState={preserveState}
+                            >
                                 {isPrevious ? (
                                     <ChevronLeft />
                                 ) : isNext ? (

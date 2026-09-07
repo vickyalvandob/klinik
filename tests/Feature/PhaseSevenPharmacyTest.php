@@ -162,7 +162,7 @@ function pharmacyPrescription(
     $context = createClinicWorkflow(SystemRole::Pharmacy, requireTriage: false);
     app(CurrentTenant::class)->set($context['tenant']);
     app(CurrentClinic::class)->set($context['clinic'], $context['membership']);
-    $context['clinic']->workflowSetting()->update(['billing_enabled' => true, 'pharmacy_enabled' => true]);
+    $context['clinic']->workflowSetting()->update(['billing_enabled' => false, 'pharmacy_enabled' => false]);
     $encounter = new Encounter([
         'patient_id' => $context['patient']->id,
         'service_unit_id' => $context['serviceUnit']->id,

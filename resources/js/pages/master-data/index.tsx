@@ -420,7 +420,7 @@ function formatValue(
 
 MasterDataIndex.layout = {
     breadcrumbs: [
-        { title: 'Dashboard', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Master Data', href: overview() },
     ],
 };

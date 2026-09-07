@@ -311,7 +311,7 @@ export default function ClinicEdit({ clinic }: { clinic: Clinic }) {
 
 ClinicEdit.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Klinik', href: dashboard() },
         { title: 'Edit Profil', href: dashboard() },
     ],

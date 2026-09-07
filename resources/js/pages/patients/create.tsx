@@ -4,7 +4,11 @@ import { PatientForm } from '@/pages/patients/form';
 import { dashboard } from '@/routes';
 import { create, index } from '@/routes/patients';
 
-export default function CreatePatient() {
+export default function CreatePatient({
+    continueRegistration,
+}: {
+    continueRegistration: boolean;
+}) {
     return (
         <>
             <Head title="Pasien baru" />
@@ -14,7 +18,7 @@ export default function CreatePatient() {
                     title="Pasien baru"
                     description="Isi identitas utama terlebih dahulu. Sistem memeriksa kemungkinan data ganda sebelum pasien disimpan."
                 />
-                <PatientForm />
+                <PatientForm continueRegistration={continueRegistration} />
             </div>
         </>
     );
@@ -22,7 +26,7 @@ export default function CreatePatient() {
 
 CreatePatient.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Pasien', href: index() },
         { title: 'Pasien baru', href: create() },
     ],

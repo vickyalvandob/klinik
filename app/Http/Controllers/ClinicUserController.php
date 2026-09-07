@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreClinicUserRequest;
 use App\Http\Requests\UpdateClinicUserRequest;
 use App\Models\ClinicMembership;
+use App\Models\ClinicRole;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\StaffProfile;
@@ -65,15 +66,23 @@ class ClinicUserController extends Controller
             ? null
             : $this->membershipData($this->findMembership($editingUuid)->load(['user', 'role', 'staffProfile', 'permissions']));
 
+        $clinicRoles = ClinicRole::query()->where('clinic_id', $this->currentClinic->id())
+            ->with('permissions:id,key')->get()->keyBy('role_id');
+        $roleOrder = array_flip(array_column(SystemRole::cases(), 'value'));
+
         return Inertia::render('clinic-users/index', [
             'memberships' => $memberships,
             'editing' => $editing,
             'filters' => ['search' => $search, 'status' => $status],
             'roles' => Role::query()
                 ->whereIn('code', array_column(SystemRole::cases(), 'value'))
-                ->orderBy('name')
-                ->get(['id', 'code', 'name'])
-                ->map(fn (Role $role): array => ['id' => $role->id, 'code' => $role->code, 'name' => $role->name]),
+                ->with('permissions:id,key')
+                ->get(['id', 'code', 'name', 'description'])
+                ->sortBy(fn (Role $role): int => $roleOrder[$role->code])->values()
+                ->map(fn (Role $role): array => [
+                    'id' => $role->id, 'code' => $role->code, 'name' => $role->name, 'description' => $role->description,
+                    'permissions' => ($clinicRoles->get($role->id)->permissions ?? $role->permissions)->pluck('key')->values()->all(),
+                ]),
             'staff' => StaffProfile::query()
                 ->where('clinic_id', $this->currentClinic->id())
                 ->where(function (Builder $query) use ($editing): void {

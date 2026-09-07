@@ -4,7 +4,6 @@ namespace App\Actions;
 
 use App\EncounterStatus;
 use App\Models\Clinic;
-use App\Models\ClinicWorkflowSetting;
 use App\Models\Encounter;
 use App\Models\Patient;
 use App\Models\Practitioner;
@@ -53,17 +52,6 @@ class RegisterEncounter
                 ->whereHas('staffProfile', fn ($query) => $query->where('is_active', true))
                 ->lockForUpdate()
                 ->firstOrFail();
-            $workflow = ClinicWorkflowSetting::query()
-                ->where('clinic_id', $clinic->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if (! $workflow->allow_walk_in) {
-                throw ValidationException::withMessages([
-                    'patient_id' => 'Pendaftaran langsung sedang dinonaktifkan untuk klinik ini.',
-                ]);
-            }
-
             $hasActiveEncounter = Encounter::query()
                 ->where('clinic_id', $clinic->id)
                 ->where('patient_id', $patient->id)
@@ -83,9 +71,7 @@ class RegisterEncounter
 
             $registrationSequence = $this->numberGenerator->next('encounter-registration', $encounterDate);
             $queueSequence = $this->numberGenerator->next("queue:{$serviceUnit->id}", $encounterDate);
-            $initialStatus = $workflow->require_triage
-                ? EncounterStatus::WaitingTriage
-                : EncounterStatus::WaitingDoctor;
+            $initialStatus = EncounterStatus::WaitingTriage;
 
             $encounter = new Encounter([
                 'patient_id' => $patient->id,

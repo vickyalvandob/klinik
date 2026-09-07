@@ -111,6 +111,10 @@ class TransitionEncounter
         }
 
         match ($status) {
+            EncounterStatus::WaitingDoctor => $queueEntry->update([
+                'status' => QueueStatus::Waiting,
+                'called_at' => null,
+            ]),
             EncounterStatus::Cancelled => $queueEntry->update([
                 'status' => QueueStatus::Cancelled,
                 'cancelled_at' => now(),

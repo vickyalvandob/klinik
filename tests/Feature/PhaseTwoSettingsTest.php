@@ -5,7 +5,7 @@ use App\SystemRole;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-test('an owner can update the clinic profile and workflow settings', function () {
+test('an owner can update the clinic profile while workflow settings are retired', function () {
     Storage::fake('public');
     ['user' => $owner, 'clinic' => $clinic] = createClinicUser();
 
@@ -31,25 +31,10 @@ test('an owner can update the clinic profile and workflow settings', function ()
         ->and($clinic->logo_path)->not->toBeNull();
     Storage::disk('public')->assertExists($clinic->logo_path);
 
-    $this->actingAs($owner)->put(route('workflow.update'), [
-        'opening_time' => '07:30',
-        'closing_time' => '19:00',
-        'default_visit_duration_minutes' => 30,
-        'require_triage' => true,
-        'allow_walk_in' => false,
-        'pharmacy_enabled' => true,
-        'billing_enabled' => true,
-        'require_primary_diagnosis' => true,
-        'require_final_medical_record' => true,
-        'allow_partial_payment' => false,
-        'auto_send_prescription_to_pharmacy' => false,
-    ])->assertRedirect()->assertSessionHasNoErrors();
+    $this->actingAs($owner)->get('/workflow')->assertNotFound();
+    $this->actingAs($owner)->put('/workflow', ['require_triage' => false])->assertNotFound();
+    expect(ClinicWorkflowSetting::withoutGlobalScopes()->where('clinic_id', $clinic->id)->exists())->toBeFalse();
 
-    $settings = ClinicWorkflowSetting::withoutGlobalScopes()->where('clinic_id', $clinic->id)->firstOrFail();
-    expect($settings->opening_time)->toBe('07:30')
-        ->and($settings->default_visit_duration_minutes)->toBe(30)
-        ->and($settings->allow_walk_in)->toBeFalse()
-        ->and($settings->auto_send_prescription_to_pharmacy)->toBeFalse();
 });
 
 test('a practitioner cannot change clinic or workflow settings', function () {
@@ -57,5 +42,5 @@ test('a practitioner cannot change clinic or workflow settings', function () {
 
     $this->actingAs($doctor)->get(route('clinics.edit', $clinic))->assertForbidden();
 
-    $this->actingAs($doctor)->get(route('workflow.edit'))->assertForbidden();
+    $this->actingAs($doctor)->get('/workflow')->assertNotFound();
 });

@@ -3,7 +3,6 @@
 namespace App\Actions;
 
 use App\EncounterStatus;
-use App\Models\ClinicWorkflowSetting;
 use App\Models\Prescription;
 use App\PrescriptionStatus;
 use App\Support\Tenancy\CurrentClinic;
@@ -44,13 +43,9 @@ class CancelPrescription
             ]);
             $this->audit($lockedPrescription, 'cancelled', $before, $userId);
 
-            $settings = ClinicWorkflowSetting::query()
-                ->where('clinic_id', $this->currentClinic->id())
-                ->firstOrNew();
-            $billingEnabled = $settings->exists ? $settings->billing_enabled : true;
             $this->transitionEncounter->execute(
                 $lockedPrescription->encounter,
-                $billingEnabled ? EncounterStatus::WaitingPayment : EncounterStatus::Completed,
+                EncounterStatus::WaitingPayment,
                 $userId,
                 'Resep dibatalkan: '.$reason,
             );

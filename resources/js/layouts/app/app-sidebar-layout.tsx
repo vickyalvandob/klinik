@@ -1,3 +1,4 @@
+import { OperationalFeedback } from '@/components/operational-feedback';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
@@ -11,8 +12,12 @@ export default function AppSidebarLayout({
     return (
         <AppShell variant="sidebar">
             <AppSidebar />
-            <AppContent variant="sidebar" className="min-w-0 overflow-x-clip">
+            <AppContent
+                variant="sidebar"
+                className="bg-muted/25 min-w-0 overflow-x-clip"
+            >
                 <AppTopbar breadcrumbs={breadcrumbs} />
+                <OperationalFeedback />
                 {children}
             </AppContent>
         </AppShell>

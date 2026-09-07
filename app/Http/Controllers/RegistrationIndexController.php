@@ -3,37 +3,43 @@
 namespace App\Http\Controllers;
 
 use App\EncounterStatus;
+use App\Http\Requests\RegistrationIndexRequest;
 use App\Models\Encounter;
+use App\Models\Patient;
 use App\Models\ServiceUnit;
 use App\Models\Triage;
+use App\Support\RegistrationFormData;
 use App\Support\Tenancy\CurrentClinic;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
-class TodayController extends Controller
+class RegistrationIndexController extends Controller
 {
     public function __construct(private readonly CurrentClinic $currentClinic) {}
 
-    public function __invoke(Request $request): Response
+    public function __invoke(RegistrationIndexRequest $request, RegistrationFormData $formData): Response
     {
         Gate::authorize('viewAny', Encounter::class);
 
         $clinic = $this->currentClinic->get();
         $today = now($clinic->timezone)->toDateString();
+        $date = $request->validated('date') ?? $today;
+        $nextDate = Carbon::parse($date)->addDay()->toDateString();
         $search = Str::squish($request->string('search')->toString());
         $status = EncounterStatus::tryFrom($request->string('status')->toString());
-        $selectedUnit = ServiceUnit::query()
+        $selectedUnit = $request->filled('service_unit') ? ServiceUnit::query()
             ->where('clinic_id', $clinic->id)
             ->where('uuid', $request->string('service_unit')->toString())
-            ->first(['id', 'uuid']);
+            ->first(['id', 'uuid']) : null;
 
-        $encounters = Encounter::query()
+        $encounters = fn () => Encounter::query()
             ->where('clinic_id', $clinic->id)
-            ->whereDate('encounter_date', $today)
+            ->where('encounter_date', '>=', $date)
+            ->where('encounter_date', '<', $nextDate)
             ->when($status !== null, fn (Builder $query) => $query->where('status', $status->value))
             ->when($selectedUnit !== null, fn (Builder $query) => $query->where('service_unit_id', $selectedUnit->id))
             ->when($search !== '', function (Builder $query) use ($search): void {
@@ -48,6 +54,7 @@ class TodayController extends Controller
                             ->where('queue_number', 'like', $like));
                 });
             })
+            ->select(['id', 'uuid', 'tenant_id', 'clinic_id', 'patient_id', 'service_unit_id', 'practitioner_id', 'registration_number', 'registered_at', 'chief_complaint', 'status'])
             ->with([
                 'patient:id,uuid,medical_record_number,name,birth_date,gender',
                 'serviceUnit:id,uuid,name',
@@ -62,23 +69,32 @@ class TodayController extends Controller
             ->withQueryString()
             ->through(fn (Encounter $encounter): array => $this->encounterData($encounter));
 
-        $statusCounts = Encounter::query()
-            ->where('clinic_id', $clinic->id)
-            ->whereDate('encounter_date', $today)
-            ->selectRaw('status, COUNT(*) as aggregate')
-            ->groupBy('status')
-            ->pluck('aggregate', 'status');
-
-        return Inertia::render('today/index', [
+        return Inertia::render('registrations/index', [
             'encounters' => $encounters,
-            'summary' => [
-                'total' => $statusCounts->sum(),
-                'waiting' => (int) $statusCounts->get(EncounterStatus::WaitingTriage->value, 0)
-                    + (int) $statusCounts->get(EncounterStatus::WaitingDoctor->value, 0),
-                'in_service' => (int) $statusCounts->get(EncounterStatus::InConsultation->value, 0),
-                'completed' => (int) $statusCounts->get(EncounterStatus::Completed->value, 0),
-            ],
+            'summary' => function () use ($clinic, $date, $nextDate): array {
+                $statusCounts = Encounter::query()
+                    ->where('clinic_id', $clinic->id)
+                    ->where('encounter_date', '>=', $date)
+                    ->where('encounter_date', '<', $nextDate)
+                    ->selectRaw('status, COUNT(*) as aggregate')
+                    ->groupBy('status')->pluck('aggregate', 'status');
+
+                return [
+                    'total' => $statusCounts->sum(),
+                    'waiting' => (int) $statusCounts->get(EncounterStatus::WaitingTriage->value, 0)
+                        + (int) $statusCounts->get(EncounterStatus::WaitingDoctor->value, 0),
+                    'in_service' => (int) $statusCounts->get(EncounterStatus::InConsultation->value, 0),
+                    'completed' => (int) $statusCounts->get(EncounterStatus::Completed->value, 0),
+                ];
+            },
+            'registration' => fn () => Gate::allows('create', Encounter::class) ? [
+                'initialPatient' => $formData->initialPatient($request->string('patient')->toString()),
+                'serviceUnits' => $formData->serviceUnits(),
+                'practitioners' => $formData->practitioners(),
+                'canCreatePatient' => Gate::allows('create', Patient::class),
+            ] : null,
             'filters' => [
+                'date' => $date,
                 'search' => $search,
                 'status' => $status === null ? '' : $status->value,
                 'service_unit' => $selectedUnit === null ? '' : $selectedUnit->uuid,
@@ -90,15 +106,15 @@ class TodayController extends Controller
                     'label' => $option->label(),
                 ])
                 ->values(),
-            'serviceUnits' => ServiceUnit::query()
+            'serviceUnits' => fn () => ServiceUnit::query()
                 ->where('clinic_id', $clinic->id)
                 ->where('type', 'outpatient')
-                ->where('is_active', true)
                 ->orderBy('name')
                 ->orderBy('id')
                 ->get(['uuid', 'name']),
-            'can' => ['create' => Gate::allows('create', Encounter::class)],
+            'can' => ['create' => Gate::allows('create', Encounter::class), 'view_patient' => Gate::allows('viewAny', Patient::class)],
             'today' => $today,
+            'timezone' => $clinic->timezone,
         ]);
     }
 

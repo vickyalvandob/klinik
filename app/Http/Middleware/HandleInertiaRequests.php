@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Authorization\PermissionCatalog;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -37,6 +39,12 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        if ($request->routeIs('queue-display.show')) {
+            Inertia::flushShared();
+
+            return ['name' => config('app.name')];
+        }
+
         $currentTenant = app(CurrentTenant::class);
         $currentClinic = app(CurrentClinic::class);
 
@@ -65,12 +73,9 @@ class HandleInertiaRequests extends Middleware
                     'code' => $currentClinic->membership()->role->code,
                     'name' => $currentClinic->membership()->role->name,
                 ],
-                'permissions' => $currentClinic->membership()->role->permissions
-                    ->merge($currentClinic->membership()->permissions)
-                    ->pluck('key')
-                    ->unique()
-                    ->values()
-                    ->all(),
+                'permissions' => collect(array_keys(PermissionCatalog::permissions()))
+                    ->filter(fn (string $permission): bool => $currentClinic->membership()->grantsPermission($permission))
+                    ->values()->all(),
             ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

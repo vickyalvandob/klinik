@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { dashboard } from '@/routes';
+import { operationalNavigation } from '@/lib/operational-navigation';
 import { index, update } from '@/routes/clinic-roles';
 
 type Role = {
@@ -89,6 +90,15 @@ export default function ClinicRolesIndex({
                                     <p className="text-muted-foreground mt-1 max-w-xl text-sm">
                                         {selectedRole.description}
                                     </p>
+                                    <p className="text-muted-foreground mt-2 text-xs">
+                                        Menu operasional aktif:{' '}
+                                        {operationalNavigation(
+                                            selectedRole.permissions,
+                                        )
+                                            .map((item) => item.title)
+                                            .join(', ')}
+                                        .
+                                    </p>
                                 </div>
                                 {selectedRole.editable ? (
                                     <Badge variant="outline">
@@ -146,11 +156,6 @@ export default function ClinicRolesIndex({
                                                                     {
                                                                         permission.name
                                                                     }
-                                                                    <span className="text-muted-foreground block font-mono text-[11px]">
-                                                                        {
-                                                                            permission.key
-                                                                        }
-                                                                    </span>
                                                                 </span>
                                                             </label>
                                                         ),
@@ -193,7 +198,7 @@ export default function ClinicRolesIndex({
 
 ClinicRolesIndex.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Peran & Izin', href: index() },
     ],
 };

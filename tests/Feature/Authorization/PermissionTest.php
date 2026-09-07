@@ -57,3 +57,12 @@ test('clinic policies require the current membership and permission', function (
     expect(Gate::forUser($doctor['user'])->allows('update', $doctor['clinic']))->toBeFalse()
         ->and(Gate::forUser($doctor['user'])->allows('viewAny', ClinicMembership::class))->toBeFalse();
 });
+
+test('inactive memberships grant neither role permissions nor additional permissions', function (SystemRole $role) {
+    $context = createClinicUser($role);
+    $context['membership']->permissions()->attach(Permission::query()->where('key', 'clinic.manage')->firstOrFail());
+    $context['membership']->update(['is_active' => false]);
+
+    expect($context['membership']->grantsPermission('clinic.manage'))->toBeFalse()
+        ->and($context['membership']->grantsPermission('billing.view'))->toBeFalse();
+})->with([SystemRole::OwnerAdmin, SystemRole::Cashier]);

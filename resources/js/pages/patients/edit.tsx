@@ -23,7 +23,7 @@ export default function EditPatient({ patient }: { patient: PatientDetail }) {
 
 EditPatient.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Pasien', href: index() },
         { title: 'Detail pasien', href: index() },
         { title: 'Edit', href: index() },

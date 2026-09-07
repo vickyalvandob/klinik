@@ -41,6 +41,12 @@ class ServiceUnit extends Model
         return $this->hasMany(ClinicService::class);
     }
 
+    /** @return HasMany<QueueEntry, $this> */
+    public function queueEntries(): HasMany
+    {
+        return $this->hasMany(QueueEntry::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {

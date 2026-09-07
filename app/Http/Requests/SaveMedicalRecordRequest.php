@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Models\ClinicWorkflowSetting;
 use App\Models\Encounter;
 use App\Models\MedicalRecord;
 use App\Support\Tenancy\CurrentClinic;
@@ -88,14 +87,7 @@ class SaveMedicalRecordRequest extends FormRequest
                 return;
             }
 
-            $settings = ClinicWorkflowSetting::query()
-                ->where('clinic_id', app(CurrentClinic::class)->id())
-                ->firstOrNew();
-            $requiresPrimaryDiagnosis = $settings->exists
-                ? $settings->require_primary_diagnosis
-                : true;
-
-            if ($requiresPrimaryDiagnosis && $primaryCount !== 1) {
+            if ($primaryCount !== 1) {
                 $validator->errors()->add('diagnoses', 'Pilih satu diagnosis utama sebelum finalisasi.');
             }
         }];

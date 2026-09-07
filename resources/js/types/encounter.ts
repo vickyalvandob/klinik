@@ -41,7 +41,13 @@ export type EncounterHistory = {
     status: StatusView;
     service_unit: string;
     practitioner: string;
-    queue_number: string;
+    queue_number: string | null;
+    can_view_medical_record: boolean;
+    invoice: {
+        uuid: string;
+        status_label: string;
+        balance_due: number;
+    } | null;
 };
 
 export type Paginator<T> = {

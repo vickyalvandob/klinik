@@ -15,7 +15,13 @@ import { request } from '@/routes/password';
 type Props = {
     status?: string;
     canResetPassword: boolean;
-    demoAccounts: Array<{ label: string; email: string; password: string }>;
+    demoAccounts: Array<{
+        label: string;
+        name: string;
+        email: string;
+        password: string;
+        description: string;
+    }>;
 };
 
 export default function Login({
@@ -143,13 +149,24 @@ export default function Login({
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            className="justify-start"
+                                            className="h-auto min-w-0 justify-start px-3 py-2.5 text-left"
+                                            title={account.description}
+                                            aria-pressed={
+                                                email === account.email
+                                            }
+                                            disabled={processing}
                                             onClick={() => {
                                                 setEmail(account.email);
                                                 setPassword(account.password);
                                             }}
                                         >
-                                            <UserRoundCheck /> {account.label}
+                                            <UserRoundCheck className="shrink-0" />
+                                            <span className="grid min-w-0 gap-0.5">
+                                                <span>{account.label}</span>
+                                                <span className="text-muted-foreground truncate text-xs font-normal">
+                                                    {account.name}
+                                                </span>
+                                            </span>
                                         </Button>
                                     ))}
                                 </div>

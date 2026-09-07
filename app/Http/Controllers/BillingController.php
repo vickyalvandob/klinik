@@ -14,6 +14,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -104,7 +105,6 @@ class BillingController extends Controller
             'payments' => fn ($query) => $query->with(['receiver:id,name', 'voider:id,name'])->oldest('received_at'),
             'audits' => fn ($query) => $query->with('actor:id,name')->oldest(),
         ]);
-        $workflow = $this->currentClinic->get()->workflowSetting()->firstOrNew();
 
         return Inertia::render('billing/show', [
             'invoice' => [
@@ -173,7 +173,7 @@ class BillingController extends Controller
                     ];
                 })->values(),
             ],
-            'allowPartialPayment' => $workflow->exists ? $workflow->allow_partial_payment : false,
+            'paymentToken' => (string) Str::uuid(),
             'paymentMethods' => collect(PaymentMethod::cases())->map(fn (PaymentMethod $method): array => [
                 'value' => $method->value,
                 'label' => $method->label(),

@@ -1,4 +1,5 @@
 import { Form, Head, Link } from '@inertiajs/react';
+import { useState } from 'react';
 import {
     KeyRound,
     Pencil,
@@ -31,6 +32,7 @@ import {
 } from '@/components/ui/table';
 import { index, store, update } from '@/routes/clinic-users';
 import { dashboard } from '@/routes';
+import { operationalNavigation } from '@/lib/operational-navigation';
 
 type Membership = {
     uuid: string;
@@ -55,7 +57,13 @@ type Pagination = {
     to: number | null;
     total: number;
 };
-type Role = { id: number; code: string; name: string };
+type Role = {
+    id: number;
+    code: string;
+    name: string;
+    description: string;
+    permissions: string[];
+};
 type Staff = { id: number; uuid: string; name: string };
 type Permission = { key: string; name: string; group: string };
 
@@ -369,26 +377,13 @@ export default function ClinicUsersIndex({
                                             error={errors.role_id}
                                             required
                                         >
-                                            <select
-                                                id="role_id"
-                                                name="role_id"
-                                                defaultValue={
-                                                    editing?.role_id ?? ''
+                                            <RoleSelect
+                                                roles={roles}
+                                                initialRoleId={editing?.role_id}
+                                                locked={
+                                                    editing?.is_self ?? false
                                                 }
-                                                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-                                            >
-                                                <option value="" disabled>
-                                                    Pilih peran
-                                                </option>
-                                                {roles.map((role) => (
-                                                    <option
-                                                        key={role.id}
-                                                        value={role.id}
-                                                    >
-                                                        {role.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            />
                                         </FormField>
                                         <FormField
                                             id="staff_profile_id"
@@ -540,7 +535,57 @@ export default function ClinicUsersIndex({
 
 ClinicUsersIndex.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Pengguna & Akses', href: index() },
     ],
 };
+
+function RoleSelect({
+    roles,
+    initialRoleId,
+    locked,
+}: {
+    roles: Role[];
+    initialRoleId?: number;
+    locked: boolean;
+}) {
+    const [roleId, setRoleId] = useState(initialRoleId?.toString() ?? '');
+    const selected = roles.find((role) => role.id.toString() === roleId);
+    const menus = selected
+        ? operationalNavigation(selected.permissions).map((item) => item.title)
+        : [];
+
+    return (
+        <div className="grid gap-2">
+            <select
+                id="role_id"
+                name="role_id"
+                value={roleId}
+                onChange={(event) => setRoleId(event.target.value)}
+                disabled={locked}
+                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+            >
+                <option value="" disabled>
+                    Pilih peran
+                </option>
+                {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                        {role.name}
+                    </option>
+                ))}
+            </select>
+            {locked && <input type="hidden" name="role_id" value={roleId} />}
+            {selected && (
+                <div className="bg-muted/30 grid gap-2 rounded-lg border p-3 text-xs">
+                    <p className="text-muted-foreground">
+                        {selected.description}
+                    </p>
+                    <p>
+                        <span className="font-medium">Menu operasional: </span>
+                        {menus.join(', ')}.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}

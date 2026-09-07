@@ -6,7 +6,6 @@ use App\DiagnosisType;
 use App\EncounterStatus;
 use App\MedicalRecordStatus;
 use App\Models\ClinicService;
-use App\Models\ClinicWorkflowSetting;
 use App\Models\DiagnosisCatalog;
 use App\Models\Encounter;
 use App\Models\MedicalRecord;
@@ -39,7 +38,6 @@ class SaveMedicalRecord
                 ->where('clinic_id', $this->currentClinic->id())
                 ->lockForUpdate()
                 ->firstOrFail();
-            $practitioner = $this->currentPractitioner->find();
 
             if ($lockedEncounter->status !== EncounterStatus::InConsultation) {
                 throw ValidationException::withMessages([
@@ -47,9 +45,9 @@ class SaveMedicalRecord
                 ]);
             }
 
-            if ($practitioner === null || $practitioner->id !== $lockedEncounter->practitioner_id) {
+            if (! $this->currentPractitioner->canManage($lockedEncounter)) {
                 throw ValidationException::withMessages([
-                    'intent' => 'Rekam medis hanya dapat diisi oleh dokter yang ditugaskan.',
+                    'intent' => 'Rekam medis hanya dapat diisi oleh dokter yang ditugaskan atau owner klinik.',
                 ]);
             }
 
@@ -77,7 +75,7 @@ class SaveMedicalRecord
                 $medicalRecord = new MedicalRecord([
                     'encounter_id' => $lockedEncounter->id,
                     'patient_id' => $lockedEncounter->patient_id,
-                    'practitioner_id' => $practitioner->id,
+                    'practitioner_id' => $lockedEncounter->practitioner_id,
                     'created_by' => $userId,
                 ]);
                 $medicalRecord->clinic_id = $lockedEncounter->clinic_id;
@@ -107,7 +105,7 @@ class SaveMedicalRecord
                 $procedure = $medicalRecord->procedures()->make([
                     ...$row,
                     'encounter_id' => $lockedEncounter->id,
-                    'practitioner_id' => $practitioner->id,
+                    'practitioner_id' => $lockedEncounter->practitioner_id,
                     'performed_at' => $finalize ? now() : null,
                     'created_by' => $userId,
                 ]);
@@ -155,14 +153,7 @@ class SaveMedicalRecord
     {
         $rows = is_array($rows) ? $rows : [];
         $primaryCount = collect($rows)->where('type', DiagnosisType::Primary->value)->count();
-        $settings = ClinicWorkflowSetting::query()
-            ->where('clinic_id', $this->currentClinic->id())
-            ->firstOrNew();
-        $requiresPrimaryDiagnosis = $settings->exists
-            ? $settings->require_primary_diagnosis
-            : true;
-
-        if ($primaryCount > 1 || ($finalize && $requiresPrimaryDiagnosis && $primaryCount !== 1)) {
+        if ($primaryCount > 1 || ($finalize && $primaryCount !== 1)) {
             throw ValidationException::withMessages([
                 'diagnoses' => $primaryCount > 1
                     ? 'Hanya satu diagnosis utama yang diperbolehkan.'
@@ -318,21 +309,9 @@ class SaveMedicalRecord
 
     private function nextEncounterStatus(?Prescription $prescription): EncounterStatus
     {
-        $settings = ClinicWorkflowSetting::query()
-            ->where('clinic_id', $this->currentClinic->id())
-            ->firstOrNew();
-        $pharmacyEnabled = $settings->exists ? $settings->pharmacy_enabled : true;
-        $billingEnabled = $settings->exists ? $settings->billing_enabled : true;
-
-        if ($pharmacyEnabled && $prescription?->items->isNotEmpty()) {
-            return EncounterStatus::WaitingPharmacy;
-        }
-
-        if ($billingEnabled) {
-            return EncounterStatus::WaitingPayment;
-        }
-
-        return EncounterStatus::Completed;
+        return $prescription?->items->isNotEmpty()
+            ? EncounterStatus::WaitingPharmacy
+            : EncounterStatus::WaitingPayment;
     }
 
     /** @return array<string, mixed> */

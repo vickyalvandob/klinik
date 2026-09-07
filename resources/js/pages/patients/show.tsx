@@ -1,25 +1,26 @@
 import { Head, Link } from '@inertiajs/react';
 import {
-    Activity,
     ArrowLeft,
-    BriefcaseBusiness,
     CalendarDays,
+    CheckCheck,
+    ClipboardList,
     ContactRound,
     HeartPulse,
     History,
-    Mail,
+    LockKeyhole,
     MapPin,
     Pencil,
     Phone,
     Plus,
     ShieldAlert,
     UserRoundCheck,
+    type LucideIcon,
 } from 'lucide-react';
-import { EmptyState } from '@/components/empty-state';
+import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
-import { PaginationLinks } from '@/components/pagination-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { edit, index } from '@/routes/patients';
 import { create as createRegistration } from '@/routes/registrations';
@@ -29,86 +30,243 @@ import type {
     PatientAllergy,
     PatientDetail,
 } from '@/types';
+import { PatientVisitHistory, type VisitSummary } from './visit-history';
+
+type PatientShowProps = {
+    patient: PatientDetail & { age_label: string; updated_at: string | null };
+    clinic: { name: string; timezone: string };
+    encounters: Paginator<EncounterHistory> | null;
+    visitSummary: VisitSummary | null;
+    filters: { history: string };
+    can: {
+        update: boolean;
+        register: boolean;
+        view_encounters: boolean;
+        view_ticket: boolean;
+    };
+};
 
 export default function PatientShow({
     patient,
+    clinic,
     encounters,
+    visitSummary,
+    filters,
     can,
-}: {
-    patient: PatientDetail;
-    encounters: Paginator<EncounterHistory>;
-    can: { update: boolean; register: boolean };
-}) {
+}: PatientShowProps) {
     const activeAllergies = patient.allergies.filter(
         (allergy) => allergy.status === 'active',
     );
     const inactiveAllergies = patient.allergies.filter(
         (allergy) => allergy.status === 'inactive',
     );
+    const registrationUrl = createRegistration({
+        query: { patient: patient.uuid },
+    });
 
     return (
         <>
-            <Head title={patient.name} />
-            <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-                <PageHeader
-                    eyebrow={patient.medical_record_number}
-                    title={patient.name}
-                    description={`${formatDate(patient.birth_date)} · ${genderLabel(patient.gender)}`}
-                    actions={
-                        <>
-                            <Button asChild variant="ghost">
-                                <Link href={index()}>
-                                    <ArrowLeft /> Kembali
-                                </Link>
-                            </Button>
-                            {can.update && (
-                                <Button asChild>
-                                    <Link href={edit(patient.uuid)}>
-                                        <Pencil /> Edit pasien
-                                    </Link>
-                                </Button>
+            <Head title={`Detail pasien · ${patient.name}`} />
+            <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-4 md:p-6">
+                <div className="flex items-center justify-between gap-3">
+                    <Button asChild variant="ghost" size="sm" className="-ml-2">
+                        <Link href={index()}>
+                            <ArrowLeft /> Daftar pasien
+                        </Link>
+                    </Button>
+                    <span className="text-muted-foreground text-xs">
+                        Detail pasien
+                    </span>
+                </div>
+
+                <section className="bg-card min-w-0 overflow-hidden rounded-xl border">
+                    <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start md:p-6">
+                        <div
+                            aria-hidden="true"
+                            className="bg-primary/10 text-primary flex size-14 shrink-0 items-center justify-center rounded-2xl text-xl font-semibold"
+                        >
+                            {patient.name
+                                .trim()
+                                .split(/\s+/)
+                                .slice(0, 2)
+                                .map((part) => part[0])
+                                .join('')
+                                .toUpperCase()}
+                        </div>
+                        <PageHeader
+                            className="min-w-0 flex-1 sm:flex-col sm:items-start lg:flex-row lg:items-center"
+                            eyebrow="Profil pasien"
+                            title={patient.name}
+                            description={`${patient.age_label} · ${genderLabel(patient.gender)} · Lahir ${formatDate(patient.birth_date)}`}
+                            actions={
+                                <>
+                                    {can.update && (
+                                        <Button asChild variant="outline">
+                                            <Link href={edit(patient.uuid)}>
+                                                <Pencil /> Edit pasien
+                                            </Link>
+                                        </Button>
+                                    )}
+                                    {can.register && (
+                                        <Button asChild>
+                                            <Link href={registrationUrl}>
+                                                <Plus /> Daftarkan kunjungan
+                                            </Link>
+                                        </Button>
+                                    )}
+                                </>
+                            }
+                        />
+                    </div>
+                    <div className="bg-muted/20 flex flex-wrap items-center gap-x-6 gap-y-3 border-t px-5 py-3 md:px-6">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground text-xs">
+                                No. RM
+                            </span>
+                            <span className="font-mono font-semibold">
+                                {patient.medical_record_number}
+                            </span>
+                        </div>
+                        <span className="text-muted-foreground text-xs">
+                            {patient.created_at
+                                ? `Terdaftar sejak ${formatDateTime(patient.created_at, clinic.timezone)}`
+                                : 'Tanggal pendaftaran belum tercatat'}
+                        </span>
+                        <a
+                            href="#alergi"
+                            className={cn(
+                                'focus-visible:ring-ring rounded-sm text-xs underline-offset-4 hover:underline focus-visible:ring-2',
+                                activeAllergies.length > 0
+                                    ? 'font-medium text-amber-800 dark:text-amber-300'
+                                    : 'text-muted-foreground',
                             )}
-                            {can.register && (
-                                <Button asChild>
-                                    <Link
-                                        href={createRegistration({
-                                            query: { patient: patient.uuid },
-                                        })}
-                                    >
-                                        <Plus /> Daftarkan
-                                    </Link>
-                                </Button>
-                            )}
-                        </>
-                    }
-                />
+                        >
+                            {activeAllergies.length > 0
+                                ? `${activeAllergies.length} alergi aktif`
+                                : 'Belum ada alergi aktif tercatat'}
+                        </a>
+                    </div>
+                </section>
 
                 {activeAllergies.length > 0 && (
-                    <section className="rounded-xl border border-amber-300 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-                        <div className="flex items-start gap-3">
-                            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-400" />
-                            <div>
-                                <h2 className="text-sm font-semibold">
-                                    Alergi aktif
-                                </h2>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {activeAllergies
-                                        .map((allergy) => allergy.substance)
-                                        .join(', ')}
-                                </p>
-                            </div>
+                    <section
+                        aria-label="Alergi aktif pasien"
+                        className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50/70 p-4 dark:border-amber-900 dark:bg-amber-950/20"
+                    >
+                        <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-400" />
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                Perhatikan alergi pasien
+                            </h2>
+                            <p className="mt-1 text-sm break-words text-amber-900/80 dark:text-amber-200/80">
+                                {activeAllergies
+                                    .map((allergy) => allergy.substance)
+                                    .join(', ')}
+                            </p>
                         </div>
+                        <a
+                            href="#alergi"
+                            className="shrink-0 rounded-sm text-xs font-medium text-amber-900 underline underline-offset-4 focus-visible:ring-2 dark:text-amber-200"
+                        >
+                            Lihat detail
+                        </a>
                     </section>
                 )}
 
-                <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                    <div className="grid gap-5">
+                {visitSummary && (
+                    <section
+                        aria-label="Ringkasan kunjungan"
+                        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+                    >
+                        <SummaryItem
+                            icon={ClipboardList}
+                            label="Total kunjungan"
+                            value={String(visitSummary.total)}
+                            description="Di klinik ini"
+                        />
+                        <SummaryItem
+                            icon={HeartPulse}
+                            label="Masih dilayani"
+                            value={String(visitSummary.active)}
+                            description="Belum selesai"
+                        />
+                        <SummaryItem
+                            icon={CheckCheck}
+                            label="Kunjungan selesai"
+                            value={String(visitSummary.completed)}
+                            description="Pelayanan tuntas"
+                        />
+                        <SummaryItem
+                            icon={CalendarDays}
+                            label="Kunjungan terakhir"
+                            value={
+                                visitSummary.last_visit_at
+                                    ? formatDateTime(
+                                          visitSummary.last_visit_at,
+                                          clinic.timezone,
+                                      )
+                                    : 'Belum ada'
+                            }
+                            description={clinic.name}
+                            compact
+                        />
+                    </section>
+                )}
+
+                <nav
+                    aria-label="Bagian detail pasien"
+                    className="flex flex-wrap gap-x-5 gap-y-2 border-b pb-3 text-sm"
+                >
+                    <SectionLink href="#riwayat">Riwayat kunjungan</SectionLink>
+                    <SectionLink href="#profil">Identitas & kontak</SectionLink>
+                    <SectionLink href="#alergi">Alergi</SectionLink>
+                </nav>
+
+                <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
+                    <div className="grid min-w-0 gap-5">
                         <DetailSection
-                            icon={ContactRound}
-                            title="Identitas"
-                            description="Identitas utama dan nomor rekam medis pasien."
+                            id="riwayat"
+                            icon={History}
+                            title="Riwayat kunjungan"
+                            description={`Riwayat pelayanan di ${clinic.name}, dari yang terbaru.`}
                         >
-                            <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                            {encounters && visitSummary ? (
+                                <PatientVisitHistory
+                                    patientUuid={patient.uuid}
+                                    encounters={encounters}
+                                    summary={visitSummary}
+                                    history={filters.history}
+                                    timezone={clinic.timezone}
+                                    canRegister={can.register}
+                                    canViewTicket={can.view_ticket}
+                                />
+                            ) : (
+                                <div className="bg-muted/20 flex items-start gap-3 rounded-lg border border-dashed p-5">
+                                    <LockKeyhole className="text-muted-foreground mt-0.5 size-5 shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-medium">
+                                            Riwayat kunjungan terbatas
+                                        </p>
+                                        <p className="text-muted-foreground mt-1 text-sm">
+                                            Akun Anda belum memiliki akses untuk
+                                            melihat riwayat pelayanan pasien.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </DetailSection>
+
+                        <DetailSection
+                            id="profil"
+                            icon={ContactRound}
+                            title="Identitas pasien"
+                            description="Data utama pasien untuk identifikasi dan administrasi."
+                        >
+                            <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                                <DetailItem
+                                    label="Nama lengkap"
+                                    value={patient.name}
+                                />
                                 <DetailItem
                                     label="Nomor rekam medis"
                                     value={patient.medical_record_number}
@@ -121,7 +279,7 @@ export default function PatientShow({
                                 />
                                 <DetailItem
                                     label="Tanggal lahir"
-                                    value={formatDate(patient.birth_date)}
+                                    value={`${formatDate(patient.birth_date)} (${patient.age_label})`}
                                 />
                                 <DetailItem
                                     label="Jenis kelamin"
@@ -130,6 +288,10 @@ export default function PatientShow({
                                 <DetailItem
                                     label="Golongan darah"
                                     value={patient.blood_type}
+                                />
+                                <DetailItem
+                                    label="Pekerjaan"
+                                    value={patient.occupation}
                                 />
                                 <DetailItem
                                     label="ID SATUSEHAT"
@@ -142,144 +304,81 @@ export default function PatientShow({
                         <DetailSection
                             icon={MapPin}
                             title="Kontak dan alamat"
-                            description="Informasi yang dipakai untuk komunikasi administratif."
+                            description="Informasi untuk menghubungi pasien."
                         >
-                            <div className="grid gap-5 sm:grid-cols-2">
-                                <IconDetail
-                                    icon={Phone}
-                                    label="Telepon"
+                            <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+                                <DetailItem
+                                    label="Nomor telepon"
                                     value={patient.phone}
+                                    href={
+                                        patient.phone
+                                            ? `tel:${patient.phone}`
+                                            : undefined
+                                    }
                                 />
-                                <IconDetail
-                                    icon={Mail}
+                                <DetailItem
                                     label="Email"
                                     value={patient.email}
+                                    href={
+                                        patient.email
+                                            ? `mailto:${patient.email}`
+                                            : undefined
+                                    }
                                 />
-                                <IconDetail
-                                    icon={BriefcaseBusiness}
-                                    label="Pekerjaan"
-                                    value={patient.occupation}
-                                />
-                                <IconDetail
-                                    icon={MapPin}
-                                    label="Alamat"
-                                    value={patient.address}
-                                />
-                            </div>
+                                <div className="sm:col-span-2">
+                                    <DetailItem
+                                        label="Alamat"
+                                        value={patient.address}
+                                    />
+                                </div>
+                            </dl>
                             {(patient.province_code ||
                                 patient.city_code ||
                                 patient.district_code ||
                                 patient.village_code) && (
-                                <div className="bg-muted/30 mt-5 grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <dl className="bg-muted/20 mt-5 grid grid-cols-2 gap-4 rounded-lg border p-4">
                                     <DetailItem
-                                        label="Provinsi"
+                                        label="Kode provinsi"
                                         value={patient.province_code}
                                         mono
                                     />
                                     <DetailItem
-                                        label="Kota/Kab."
+                                        label="Kode kota / kabupaten"
                                         value={patient.city_code}
                                         mono
                                     />
                                     <DetailItem
-                                        label="Kecamatan"
+                                        label="Kode kecamatan"
                                         value={patient.district_code}
                                         mono
                                     />
                                     <DetailItem
-                                        label="Kelurahan/Desa"
+                                        label="Kode kelurahan / desa"
                                         value={patient.village_code}
                                         mono
                                     />
-                                </div>
-                            )}
-                        </DetailSection>
-
-                        <DetailSection
-                            icon={History}
-                            title="Riwayat kunjungan"
-                            description="Kunjungan terbaru ditampilkan lebih dahulu tanpa membuka data klinis sensitif."
-                        >
-                            {encounters.data.length === 0 ? (
-                                <EmptyState
-                                    icon={CalendarDays}
-                                    title="Belum ada riwayat kunjungan"
-                                    description="Riwayat akan tampil setelah pasien didaftarkan ke layanan."
-                                    className="bg-muted/20 min-h-52 rounded-lg border-0"
-                                    action={
-                                        can.register ? (
-                                            <Button asChild variant="outline">
-                                                <Link
-                                                    href={createRegistration({
-                                                        query: {
-                                                            patient:
-                                                                patient.uuid,
-                                                        },
-                                                    })}
-                                                >
-                                                    <Plus /> Daftarkan pasien
-                                                </Link>
-                                            </Button>
-                                        ) : undefined
-                                    }
-                                />
-                            ) : (
-                                <div className="grid gap-3">
-                                    {encounters.data.map((encounter) => (
-                                        <article
-                                            key={encounter.uuid}
-                                            className="grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
-                                        >
-                                            <div className="min-w-0">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <p className="font-mono text-sm font-semibold">
-                                                        {encounter.queue_number}
-                                                    </p>
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="font-normal"
-                                                    >
-                                                        {encounter.status.label}
-                                                    </Badge>
-                                                </div>
-                                                <p className="mt-2 text-sm font-medium">
-                                                    {encounter.service_unit} ·{' '}
-                                                    {encounter.practitioner}
-                                                </p>
-                                                <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
-                                                    {encounter.chief_complaint}
-                                                </p>
-                                            </div>
-                                            <div className="text-muted-foreground text-xs sm:text-right">
-                                                <p>
-                                                    {formatDateTime(
-                                                        encounter.registered_at,
-                                                    )}
-                                                </p>
-                                                <p className="mt-1 font-mono">
-                                                    {
-                                                        encounter.registration_number
-                                                    }
-                                                </p>
-                                            </div>
-                                        </article>
-                                    ))}
-                                    <PaginationLinks links={encounters.links} />
-                                </div>
+                                </dl>
                             )}
                         </DetailSection>
                     </div>
 
-                    <aside className="grid gap-5">
+                    <aside className="grid min-w-0 gap-5">
                         <DetailSection
-                            icon={HeartPulse}
-                            title="Alergi"
-                            description="Alergi aktif ditampilkan lebih menonjol."
+                            id="alergi"
+                            icon={ShieldAlert}
+                            title="Alergi pasien"
+                            description="Zat pemicu, reaksi, dan tingkat keparahan."
                         >
-                            {patient.allergies.length === 0 ? (
-                                <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-                                    Belum ada alergi tercatat.
-                                </p>
+                            {activeAllergies.length === 0 ? (
+                                <div className="bg-muted/20 rounded-lg border border-dashed p-4">
+                                    <p className="text-sm font-medium">
+                                        Belum ada alergi aktif tercatat
+                                    </p>
+                                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                                        Konfirmasi riwayat alergi kepada pasien
+                                        sebelum pelayanan.
+                                    </p>
+                                </div>
                             ) : (
                                 <div className="grid gap-3">
                                     {activeAllergies.map((allergy) => (
@@ -288,43 +387,68 @@ export default function PatientShow({
                                             allergy={allergy}
                                         />
                                     ))}
-                                    {inactiveAllergies.length > 0 && (
-                                        <div className="border-t pt-3">
-                                            <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-                                                Riwayat tidak aktif
-                                            </p>
-                                            <div className="grid gap-2 opacity-70">
-                                                {inactiveAllergies.map(
-                                                    (allergy) => (
-                                                        <AllergyItem
-                                                            key={allergy.uuid}
-                                                            allergy={allergy}
-                                                        />
-                                                    ),
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
+                            )}
+                            {inactiveAllergies.length > 0 && (
+                                <details className="mt-4 border-t pt-4">
+                                    <summary className="focus-visible:ring-ring cursor-pointer rounded-sm text-xs font-medium focus-visible:ring-2">
+                                        Riwayat alergi tidak aktif (
+                                        {inactiveAllergies.length})
+                                    </summary>
+                                    <div className="mt-3 grid gap-3">
+                                        {inactiveAllergies.map((allergy) => (
+                                            <AllergyItem
+                                                key={allergy.uuid}
+                                                allergy={allergy}
+                                            />
+                                        ))}
+                                    </div>
+                                </details>
+                            )}
+                            {can.update && (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-4 w-full"
+                                >
+                                    <Link href={edit(patient.uuid)}>
+                                        <Pencil /> Perbarui data alergi
+                                    </Link>
+                                </Button>
                             )}
                         </DetailSection>
 
                         <DetailSection
                             icon={UserRoundCheck}
                             title="Kontak darurat"
-                            description="Digunakan hanya ketika diperlukan."
+                            description="Orang yang dapat dihubungi saat diperlukan."
                         >
-                            <div className="grid gap-4">
+                            <dl className="grid gap-4">
                                 <DetailItem
-                                    label="Nama"
+                                    label="Nama kontak"
                                     value={patient.emergency_contact_name}
                                 />
                                 <DetailItem
-                                    label="Telepon"
+                                    label="Nomor telepon"
                                     value={patient.emergency_contact_phone}
+                                    href={
+                                        patient.emergency_contact_phone
+                                            ? `tel:${patient.emergency_contact_phone}`
+                                            : undefined
+                                    }
                                 />
-                            </div>
+                            </dl>
                         </DetailSection>
+
+                        <div className="text-muted-foreground flex items-start gap-2 px-1 text-xs leading-relaxed">
+                            <ContactRound className="mt-0.5 size-4 shrink-0" />
+                            <p>
+                                {patient.updated_at
+                                    ? `Data pasien diperbarui ${formatDateTime(patient.updated_at, clinic.timezone, true)}.`
+                                    : 'Waktu pembaruan belum tercatat.'}
+                            </p>
+                        </div>
                     </aside>
                 </div>
             </div>
@@ -332,26 +456,82 @@ export default function PatientShow({
     );
 }
 
+function SectionLink({
+    href,
+    children,
+}: {
+    href: string;
+    children: ReactNode;
+}) {
+    return (
+        <a
+            href={href}
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-sm py-1 font-medium underline-offset-4 hover:underline focus-visible:ring-2"
+        >
+            {children}
+        </a>
+    );
+}
+
+function SummaryItem({
+    icon: Icon,
+    label,
+    value,
+    description,
+    compact = false,
+}: {
+    icon: LucideIcon;
+    label: string;
+    value: string;
+    description: string;
+    compact?: boolean;
+}) {
+    return (
+        <div className="bg-card min-w-0 rounded-xl border p-4">
+            <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                <Icon className="size-4 shrink-0" />
+                <span>{label}</span>
+            </div>
+            <p
+                className={cn(
+                    'mt-3 font-semibold tracking-tight tabular-nums',
+                    compact ? 'text-base sm:text-lg' : 'text-2xl',
+                )}
+            >
+                {value}
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs break-words">
+                {description}
+            </p>
+        </div>
+    );
+}
+
 function DetailSection({
+    id,
     icon: Icon,
     title,
     description,
     children,
 }: {
-    icon: typeof Activity;
+    id?: string;
+    icon: LucideIcon;
     title: string;
     description: string;
-    children: React.ReactNode;
+    children: ReactNode;
 }) {
     return (
-        <section className="bg-card rounded-xl border">
-            <div className="flex items-start gap-3 border-b px-4 py-4 md:px-5">
-                <span className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg">
+        <section
+            id={id}
+            className="bg-card min-w-0 scroll-mt-20 rounded-xl border"
+        >
+            <div className="flex items-start gap-3 border-b p-4 md:px-5">
+                <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
                     <Icon className="size-4" />
                 </span>
-                <div>
+                <div className="min-w-0">
                     <h2 className="font-semibold">{title}</h2>
-                    <p className="text-muted-foreground mt-1 text-xs">
+                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
                         {description}
                     </p>
                 </div>
@@ -365,64 +545,80 @@ function DetailItem({
     label,
     value,
     mono = false,
+    href,
 }: {
     label: string;
     value: string | null;
     mono?: boolean;
+    href?: string;
 }) {
     return (
-        <div>
+        <div className="min-w-0">
             <dt className="text-muted-foreground text-xs">{label}</dt>
             <dd
-                className={`mt-1 text-sm font-medium break-words ${mono ? 'font-mono' : ''}`}
+                className={cn(
+                    'mt-1.5 text-sm font-medium break-words whitespace-pre-line',
+                    mono && 'font-mono',
+                    !value && 'text-muted-foreground font-normal',
+                )}
             >
-                {value || '—'}
+                {value && href ? (
+                    <a
+                        href={href}
+                        className="text-primary focus-visible:ring-ring inline-flex max-w-full items-center gap-1.5 rounded-sm underline-offset-4 hover:underline focus-visible:ring-2"
+                    >
+                        {href.startsWith('tel:') && (
+                            <Phone className="size-3.5 shrink-0" />
+                        )}
+                        <span className="min-w-0 break-all">{value}</span>
+                    </a>
+                ) : (
+                    value || 'Belum diisi'
+                )}
             </dd>
         </div>
     );
 }
 
-function IconDetail({
-    icon: Icon,
-    label,
-    value,
-}: {
-    icon: typeof Activity;
-    label: string;
-    value: string | null;
-}) {
-    return (
-        <div className="flex gap-3">
-            <Icon className="text-primary mt-0.5 size-4 shrink-0" />
-            <div className="min-w-0">
-                <p className="text-muted-foreground text-xs">{label}</p>
-                <p className="mt-1 text-sm font-medium break-words">
-                    {value || '—'}
-                </p>
-            </div>
-        </div>
-    );
-}
-
 function AllergyItem({ allergy }: { allergy: PatientAllergy }) {
-    const severityLabels: Record<string, string> = {
+    const severityLabels = {
         mild: 'Ringan',
         moderate: 'Sedang',
         severe: 'Berat',
     };
+    const severe = allergy.status === 'active' && allergy.severity === 'severe';
 
     return (
-        <div className="rounded-lg border p-3">
+        <div
+            className={cn(
+                'rounded-lg border p-3',
+                severe &&
+                    'border-red-300 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20',
+            )}
+        >
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold">{allergy.substance}</p>
-                <Badge variant="outline">
-                    {allergy.status === 'active' ? 'Aktif' : 'Tidak aktif'}
+                <p className="min-w-0 text-sm font-semibold break-words">
+                    {allergy.substance}
+                </p>
+                <Badge
+                    variant="outline"
+                    className={cn(
+                        severe &&
+                            'border-red-300 text-red-700 dark:text-red-300',
+                    )}
+                >
+                    {allergy.severity
+                        ? severityLabels[allergy.severity]
+                        : 'Keparahan belum dicatat'}
                 </Badge>
             </div>
-            <p className="text-muted-foreground mt-2 text-xs">
+            <p className="text-muted-foreground mt-2 text-xs leading-relaxed break-words">
                 {allergy.reaction || 'Reaksi belum dicatat'}
-                {allergy.severity
-                    ? ` · ${severityLabels[allergy.severity]}`
+            </p>
+            <p className="text-muted-foreground mt-2 text-[11px]">
+                {allergy.status === 'active' ? 'Alergi aktif' : 'Tidak aktif'}
+                {allergy.code
+                    ? ` · ${allergy.code_system ?? ''} ${allergy.code}`
                     : ''}
             </p>
         </div>
@@ -431,19 +627,19 @@ function AllergyItem({ allergy }: { allergy: PatientAllergy }) {
 
 function formatDate(value: string) {
     return new Intl.DateTimeFormat('id-ID', {
-        day: '2-digit',
+        day: 'numeric',
         month: 'short',
         year: 'numeric',
     }).format(new Date(`${value}T00:00:00`));
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string, timezone: string, withTime = false) {
     return new Intl.DateTimeFormat('id-ID', {
-        day: '2-digit',
+        day: 'numeric',
         month: 'short',
         year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+        timeZone: timezone,
+        ...(withTime ? ({ hour: '2-digit', minute: '2-digit' } as const) : {}),
     }).format(new Date(value));
 }
 
@@ -453,8 +649,8 @@ function genderLabel(gender: PatientDetail['gender']) {
 
 PatientShow.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Pasien', href: index() },
-        { title: 'Detail pasien', href: index() },
+        { title: 'Detail pasien', href: '#' },
     ],
 };

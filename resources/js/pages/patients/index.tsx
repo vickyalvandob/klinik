@@ -154,10 +154,8 @@ export default function PatientsIndex({
                                             <TableHead>Lahir / JK</TableHead>
                                             <TableHead>Kontak</TableHead>
                                             <TableHead>Alergi aktif</TableHead>
-                                            <TableHead className="w-12">
-                                                <span className="sr-only">
-                                                    Aksi
-                                                </span>
+                                            <TableHead className="w-28 text-right">
+                                                Detail
                                             </TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -228,14 +226,15 @@ export default function PatientsIndex({
                                                     <Button
                                                         asChild
                                                         variant="ghost"
-                                                        size="icon"
+                                                        size="sm"
                                                     >
                                                         <Link
                                                             href={show(
                                                                 patient.uuid,
                                                             )}
-                                                            aria-label={`Buka ${patient.name}`}
+                                                            aria-label={`Detail pasien ${patient.name}`}
                                                         >
+                                                            Detail
                                                             <ChevronRight />
                                                         </Link>
                                                     </Button>
@@ -313,7 +312,7 @@ function genderLabel(gender: PatientSummary['gender']) {
 
 PatientsIndex.layout = {
     breadcrumbs: [
-        { title: 'Hari Ini', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Pasien', href: index() },
     ],
 };

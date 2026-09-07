@@ -30,10 +30,26 @@ return [
 
     'disks' => [
 
+        'clinical' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/clinical'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
+
+        'backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/backups'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],

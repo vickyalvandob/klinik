@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\CurrentPractitioner;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
+use App\SystemRole;
 
 class MedicalRecordPolicy
 {
@@ -71,12 +72,13 @@ class MedicalRecordPolicy
         return $this->view($user, $medicalRecord)
             && $user->hasClinicPermission('medical_record.amend')
             && in_array($medicalRecord->status, [MedicalRecordStatus::Final, MedicalRecordStatus::Amended], true)
-            && $this->currentPractitioner->find() !== null;
+            && ($this->currentClinic->membership()->role->code === SystemRole::OwnerAdmin->value
+                || $this->currentPractitioner->find() !== null);
     }
 
     private function isAssignedPractitioner(Encounter $encounter): bool
     {
-        return $this->currentPractitioner->find()?->id === $encounter->practitioner_id;
+        return $this->currentPractitioner->canManage($encounter);
     }
 
     private function matchesCurrentContext(User $user): bool

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Models\User;
+use App\Support\DemoAccounts;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -76,15 +77,7 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'status' => $request->session()->get('status'),
-            'demoAccounts' => app()->isLocal() ? [
-                ['label' => 'Owner', 'email' => 'owner@klinik.test', 'password' => 'password'],
-                ['label' => 'Front Office', 'email' => 'frontoffice@klinik.test', 'password' => 'password'],
-                ['label' => 'Perawat', 'email' => 'perawat@klinik.test', 'password' => 'password'],
-                ['label' => 'Dokter', 'email' => 'dokter@klinik.test', 'password' => 'password'],
-                ['label' => 'Farmasi', 'email' => 'farmasi@klinik.test', 'password' => 'password'],
-                ['label' => 'Kasir', 'email' => 'kasir@klinik.test', 'password' => 'password'],
-                ['label' => 'Platform', 'email' => 'platform@klinik.test', 'password' => 'password'],
-            ] : [],
+            'demoAccounts' => DemoAccounts::loginOptions(),
         ]));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [

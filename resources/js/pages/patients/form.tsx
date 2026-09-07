@@ -13,6 +13,7 @@ import { FormField } from '@/components/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { create as registrationCreate } from '@/routes/registrations';
 import { duplicates, index, show, store, update } from '@/routes/patients';
 import type {
     PatientAllergy,
@@ -29,7 +30,13 @@ const selectClassName =
 const textareaClassName =
     'border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 w-full rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-[3px]';
 
-export function PatientForm({ patient }: { patient?: PatientDetail }) {
+export function PatientForm({
+    patient,
+    continueRegistration = false,
+}: {
+    patient?: PatientDetail;
+    continueRegistration?: boolean;
+}) {
     const [name, setName] = useState(patient?.name ?? '');
     const [birthDate, setBirthDate] = useState(patient?.birth_date ?? '');
     const [nationalIdNumber, setNationalIdNumber] = useState(
@@ -52,7 +59,11 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
         })) ?? [],
     );
 
-    const formRoute = patient ? update.form(patient.uuid) : store.form();
+    const formRoute = patient
+        ? update.form(patient.uuid)
+        : store.form({
+              query: { register: continueRegistration ? 1 : undefined },
+          });
     const hasExactNationalId = candidates.some(
         (candidate) => candidate.exact_national_id,
     );
@@ -635,7 +646,15 @@ export function PatientForm({ patient }: { patient?: PatientDetail }) {
 
                     <div className="bg-background/95 sticky bottom-0 z-10 flex flex-col-reverse gap-2 border-t py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-end">
                         <Button asChild type="button" variant="ghost">
-                            <Link href={patient ? show(patient.uuid) : index()}>
+                            <Link
+                                href={
+                                    patient
+                                        ? show(patient.uuid)
+                                        : continueRegistration
+                                          ? registrationCreate()
+                                          : index()
+                                }
+                            >
                                 Batal
                             </Link>
                         </Button>

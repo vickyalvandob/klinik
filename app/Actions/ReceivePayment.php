@@ -5,7 +5,6 @@ namespace App\Actions;
 use App\EncounterStatus;
 use App\InvoiceStatus;
 use App\Models\BillingAudit;
-use App\Models\ClinicWorkflowSetting;
 use App\Models\Encounter;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -25,7 +24,7 @@ class ReceivePayment
     ) {}
 
     /**
-     * @param  array{amount: int, method: string, reference_number?: string|null, notes?: string|null}  $attributes
+     * @param  array{amount: int, method: string, reference_number?: string|null, notes?: string|null, request_key?: string|null}  $attributes
      */
     public function execute(Invoice $invoice, array $attributes, int $userId): Payment
     {
@@ -55,15 +54,9 @@ class ReceivePayment
                 throw ValidationException::withMessages(['amount' => 'Nominal melebihi sisa tagihan.']);
             }
 
-            $workflow = ClinicWorkflowSetting::query()
-                ->where('clinic_id', $this->currentClinic->id())
-                ->lockForUpdate()
-                ->firstOrNew();
-            $allowsPartialPayment = $workflow->exists ? $workflow->allow_partial_payment : false;
-
-            if ($amount < $lockedInvoice->balance_due && ! $allowsPartialPayment) {
+            if ($amount < 1) {
                 throw ValidationException::withMessages([
-                    'amount' => 'Klinik ini tidak mengizinkan pembayaran sebagian.',
+                    'amount' => 'Nominal pembayaran minimal Rp1.',
                 ]);
             }
 
@@ -83,7 +76,10 @@ class ReceivePayment
                 'received_at' => now(),
                 'received_by' => $userId,
             ]);
-            $payment->forceFill(['clinic_id' => $lockedInvoice->clinic_id]);
+            $payment->forceFill([
+                'clinic_id' => $lockedInvoice->clinic_id,
+                'request_key' => $attributes['request_key'] ?? null,
+            ]);
             $payment->save();
 
             $paidAmount = $lockedInvoice->payments()

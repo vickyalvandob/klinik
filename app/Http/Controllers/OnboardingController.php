@@ -6,11 +6,9 @@ use App\Http\Requests\OnboardingClinicRequest;
 use App\Http\Requests\OnboardingDoctorRequest;
 use App\Http\Requests\OnboardingServicesRequest;
 use App\Http\Requests\OnboardingUsersRequest;
-use App\Http\Requests\OnboardingWorkflowRequest;
 use App\Models\Clinic;
 use App\Models\ClinicMembership;
 use App\Models\ClinicService;
-use App\Models\ClinicWorkflowSetting;
 use App\Models\Practitioner;
 use App\Models\Role;
 use App\Models\ServiceUnit;
@@ -38,7 +36,7 @@ class OnboardingController extends Controller
         }
 
         return Inertia::render('onboarding/show', [
-            'step' => $clinic->onboarding_step,
+            'step' => min(5, $clinic->onboarding_step),
             'clinic' => [
                 'name' => $clinic->name,
                 'legal_name' => $clinic->legal_name,
@@ -60,7 +58,6 @@ class OnboardingController extends Controller
                 'users' => ClinicMembership::query()->where('clinic_id', $clinic->id)->where('is_active', true)->count(),
                 'service_units' => ServiceUnit::query()->where('clinic_id', $clinic->id)->where('is_active', true)->count(),
                 'services' => ClinicService::query()->where('clinic_id', $clinic->id)->where('is_active', true)->count(),
-                'workflow' => ClinicWorkflowSetting::query()->where('clinic_id', $clinic->id)->exists(),
             ],
         ]);
     }
@@ -173,29 +170,15 @@ class OnboardingController extends Controller
         return $this->nextStep('Unit dan layanan pertama berhasil dibuat.');
     }
 
-    public function workflow(OnboardingWorkflowRequest $request): RedirectResponse
-    {
-        DB::transaction(function () use ($request): void {
-            $clinic = $this->expectStep(5);
-            $settings = new ClinicWorkflowSetting($request->validated());
-            $settings->clinic_id = $clinic->id;
-            $settings->save();
-            $clinic->forceFill(['onboarding_step' => 6])->save();
-        });
-
-        return $this->nextStep('Alur layanan tersimpan. Periksa kesiapan klinik Anda.');
-    }
-
     public function complete(): RedirectResponse
     {
         DB::transaction(function (): void {
-            $clinic = $this->expectStep(6);
+            $clinic = $this->expectStep([5, 6]);
 
             abort_unless(
                 Practitioner::query()->where('clinic_id', $clinic->id)->where('is_active', true)->exists()
                 && ServiceUnit::query()->where('clinic_id', $clinic->id)->where('is_active', true)->exists()
-                && ClinicService::query()->where('clinic_id', $clinic->id)->where('is_active', true)->exists()
-                && ClinicWorkflowSetting::query()->where('clinic_id', $clinic->id)->exists(),
+                && ClinicService::query()->where('clinic_id', $clinic->id)->where('is_active', true)->exists(),
                 422,
                 'Data wajib onboarding belum lengkap.',
             );
@@ -214,12 +197,13 @@ class OnboardingController extends Controller
         return to_route('dashboard');
     }
 
-    private function expectStep(int $step): Clinic
+    /** @param int|list<int> $step */
+    private function expectStep(int|array $step): Clinic
     {
         $currentClinic = $this->currentClinic->get();
         Gate::authorize('update', $currentClinic);
         $clinic = Clinic::query()->whereKey($currentClinic->id)->lockForUpdate()->firstOrFail();
-        abort_if($clinic->hasCompletedOnboarding() || $clinic->onboarding_step !== $step, 409, 'Langkah onboarding tidak sesuai.');
+        abort_if($clinic->hasCompletedOnboarding() || ! in_array($clinic->onboarding_step, (array) $step, true), 409, 'Langkah onboarding tidak sesuai.');
 
         return $clinic;
     }

@@ -346,7 +346,7 @@ function auditLabel(action: string) {
 
 PharmacyShow.layout = {
     breadcrumbs: [
-        { title: 'Dashboard', href: dashboard() },
+        { title: 'Ringkasan', href: dashboard() },
         { title: 'Apotek', href: index() },
         { title: 'Detail Resep', href: index() },
     ],

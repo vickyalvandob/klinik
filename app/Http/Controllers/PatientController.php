@@ -4,13 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Actions\CreatePatient;
 use App\Actions\UpdatePatient;
+use App\EncounterStatus;
 use App\Http\Requests\StorePatientRequest;
 use App\Http\Requests\UpdatePatientRequest;
 use App\Models\Encounter;
+use App\Models\Invoice;
+use App\Models\MedicalRecord;
 use App\Models\Patient;
 use App\Support\PatientData;
 use App\Support\Tenancy\CurrentClinic;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -68,11 +73,13 @@ class PatientController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         Gate::authorize('create', Patient::class);
 
-        return Inertia::render('patients/create');
+        return Inertia::render('patients/create', [
+            'continueRegistration' => $request->boolean('register') && Gate::allows('create', Encounter::class),
+        ]);
     }
 
     public function store(StorePatientRequest $request, CreatePatient $createPatient): RedirectResponse
@@ -88,23 +95,89 @@ class PatientController extends Controller
             'message' => "Pasien {$patient->name} berhasil dibuat dengan nomor RM {$patient->medical_record_number}.",
         ]);
 
+        if ($request->boolean('register') && Gate::allows('create', Encounter::class)) {
+            return to_route('registrations.create', ['patient' => $patient->uuid]);
+        }
+
         return to_route('patients.show', $patient);
     }
 
-    public function show(Patient $patient): Response
+    public function show(Request $request, Patient $patient): Response
     {
         Gate::authorize('view', $patient);
         $this->loadPatient($patient);
 
-        $encounters = Encounter::query()
+        $canViewEncounters = Gate::allows('viewAny', Encounter::class);
+        $history = in_array($request->string('history')->toString(), ['active', 'completed', 'cancelled'], true)
+            ? $request->string('history')->toString()
+            : 'all';
+        $clinic = $this->currentClinic->get();
+        $age = $patient->birth_date->diff(now($clinic->timezone));
+
+        return Inertia::render('patients/show', [
+            'patient' => [
+                ...PatientData::detail($patient),
+                'age_label' => $age->y > 0 ? $age->y.' tahun' : ($age->m > 0 ? $age->m.' bulan' : $age->d.' hari'),
+                'updated_at' => $patient->updated_at?->toIso8601String(),
+            ],
+            'clinic' => $clinic->only(['name', 'timezone']),
+            'visitSummary' => fn (): ?array => $canViewEncounters ? $this->visitSummary($patient) : null,
+            'encounters' => fn () => $canViewEncounters ? $this->encounterHistory($patient, $history) : null,
+            'filters' => ['history' => $history],
+            'can' => [
+                'update' => Gate::allows('update', $patient),
+                'register' => Gate::allows('create', Encounter::class),
+                'view_encounters' => $canViewEncounters,
+                'view_ticket' => $canViewEncounters && $request->user()->hasClinicPermission('registration.view'),
+            ],
+        ]);
+    }
+
+    /** @return array{total: int, active: int, completed: int, cancelled: int, last_visit_at: ?string} */
+    private function visitSummary(Patient $patient): array
+    {
+        $query = Encounter::query()
+            ->where('clinic_id', $this->currentClinic->id())
+            ->where('patient_id', $patient->id);
+        $counts = (clone $query)->selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status');
+        $total = (int) $counts->sum();
+        $completed = (int) $counts->get(EncounterStatus::Completed->value, 0);
+        $cancelled = (int) $counts->get(EncounterStatus::Cancelled->value, 0);
+
+        return [
+            'total' => $total,
+            'active' => $total - $completed - $cancelled,
+            'completed' => $completed,
+            'cancelled' => $cancelled,
+            'last_visit_at' => (clone $query)->latest('registered_at')->latest('id')->first(['registered_at'])?->registered_at->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function encounterHistory(Patient $patient, string $history): array
+    {
+        $canViewRecords = Gate::allows('viewAny', MedicalRecord::class);
+        $canViewBilling = Gate::allows('viewAny', Invoice::class);
+
+        return Encounter::query()
             ->where('clinic_id', $this->currentClinic->id())
             ->where('patient_id', $patient->id)
+            ->when($history === 'active', fn (Builder $query) => $query->whereNotIn('status', [EncounterStatus::Completed, EncounterStatus::Cancelled]))
+            ->when($history === 'completed', fn (Builder $query) => $query->where('status', EncounterStatus::Completed))
+            ->when($history === 'cancelled', fn (Builder $query) => $query->where('status', EncounterStatus::Cancelled))
             ->with([
                 'serviceUnit:id,uuid,name',
                 'practitioner:id,uuid,staff_profile_id',
                 'practitioner.staffProfile:id,name',
                 'queueEntry:id,encounter_id,queue_number',
             ])
+            ->when($canViewRecords, fn (Builder $query) => $query->withExists([
+                'medicalRecord' => fn (Builder $record) => $record->where('clinic_id', $this->currentClinic->id()),
+            ]))
+            ->when($canViewBilling, fn (Builder $query) => $query->with([
+                'invoice' => fn (Relation $invoice) => $invoice->where('clinic_id', $this->currentClinic->id())
+                    ->select(['id', 'uuid', 'encounter_id', 'tenant_id', 'clinic_id', 'status', 'balance_due']),
+            ]))
             ->latest('registered_at')
             ->latest('id')
             ->paginate(10, pageName: 'encounters_page')
@@ -121,17 +194,15 @@ class PatientController extends Controller
                 ],
                 'service_unit' => $encounter->serviceUnit->name,
                 'practitioner' => $encounter->practitioner->staffProfile->name,
-                'queue_number' => $encounter->queueEntry->queue_number,
-            ]);
-
-        return Inertia::render('patients/show', [
-            'patient' => PatientData::detail($patient),
-            'encounters' => $encounters,
-            'can' => [
-                'update' => Gate::allows('update', $patient),
-                'register' => Gate::allows('create', Encounter::class),
-            ],
-        ]);
+                'queue_number' => $encounter->queueEntry?->queue_number,
+                'can_view_medical_record' => $canViewRecords && (bool) $encounter->getAttribute('medical_record_exists')
+                    && Gate::allows('viewEncounter', [MedicalRecord::class, $encounter]),
+                'invoice' => $canViewBilling && $encounter->invoice !== null && Gate::allows('view', $encounter->invoice) ? [
+                    'uuid' => $encounter->invoice->uuid,
+                    'status_label' => $encounter->invoice->status->label(),
+                    'balance_due' => $encounter->invoice->balance_due,
+                ] : null,
+            ])->toArray();
     }
 
     public function edit(Patient $patient): Response
@@ -167,7 +238,7 @@ class PatientController extends Controller
     private function loadPatient(Patient $patient): void
     {
         $patient->load([
-            'allergies' => fn (Builder $query) => $query->orderBy('status')->orderBy('substance')->orderBy('id'),
+            'allergies' => fn (HasMany $query) => $query->orderBy('status')->orderBy('substance')->orderBy('id'),
         ])->loadCount([
             'allergies as active_allergies_count' => fn (Builder $query) => $query->where('status', 'active'),
         ]);

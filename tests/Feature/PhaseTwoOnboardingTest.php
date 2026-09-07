@@ -12,7 +12,7 @@ use App\Models\User;
 use App\SystemRole;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('an incomplete clinic is directed to the six-step onboarding', function () {
+test('an incomplete clinic is directed to the five-step onboarding', function () {
     ['user' => $user, 'clinic' => $clinic] = createClinicUser();
     $clinic->forceFill(['onboarding_step' => 1, 'onboarding_completed_at' => null])->save();
 
@@ -73,20 +73,6 @@ test('an owner can complete onboarding and make a new clinic operational', funct
         'duration_minutes' => 20,
     ])->assertRedirect(route('onboarding.show'));
 
-    $this->actingAs($owner)->put(route('onboarding.workflow'), [
-        'opening_time' => '08:00',
-        'closing_time' => '18:00',
-        'default_visit_duration_minutes' => 20,
-        'require_triage' => true,
-        'allow_walk_in' => true,
-        'pharmacy_enabled' => true,
-        'billing_enabled' => true,
-        'require_primary_diagnosis' => true,
-        'require_final_medical_record' => true,
-        'allow_partial_payment' => false,
-        'auto_send_prescription_to_pharmacy' => true,
-    ])->assertRedirect(route('onboarding.show'));
-
     $this->actingAs($owner)->post(route('onboarding.complete'))
         ->assertRedirect(route('dashboard'));
 
@@ -99,7 +85,7 @@ test('an owner can complete onboarding and make a new clinic operational', funct
         ->and(Practitioner::withoutGlobalScopes()->where('clinic_id', $clinic->id)->count())->toBe(1)
         ->and(ServiceUnit::withoutGlobalScopes()->where('clinic_id', $clinic->id)->count())->toBe(1)
         ->and(ClinicService::withoutGlobalScopes()->where('clinic_id', $clinic->id)->count())->toBe(1)
-        ->and(ClinicWorkflowSetting::withoutGlobalScopes()->where('clinic_id', $clinic->id)->exists())->toBeTrue()
+        ->and(ClinicWorkflowSetting::withoutGlobalScopes()->where('clinic_id', $clinic->id)->exists())->toBeFalse()
         ->and(ClinicMembership::withoutGlobalScopes()->where('clinic_id', $clinic->id)->count())->toBe(2)
         ->and(User::query()->where('email', 'frontoffice@harapan.test')->exists())->toBeTrue();
 

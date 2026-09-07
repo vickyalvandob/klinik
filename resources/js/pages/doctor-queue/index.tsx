@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Form, Head, Link } from '@inertiajs/react';
 import {
     AlertTriangle,
     CheckCircle2,
@@ -9,6 +9,7 @@ import {
 import { PageHeader } from '@/components/page-header';
 import { PaginationLinks } from '@/components/pagination-links';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { store as startConsultation } from '@/routes/consultations';
 import { index } from '@/routes/doctor-queue';
 import { edit as editMedicalRecord } from '@/routes/medical-records';
@@ -40,13 +41,13 @@ export default function DoctorQueueIndex({
                 <PageHeader
                     eyebrow={
                         scope === 'clinic'
-                            ? 'Pengawasan klinis'
+                            ? 'Pelayanan klinik'
                             : 'Workspace dokter'
                     }
                     title="Rekam Medis"
                     description={
                         scope === 'clinic'
-                            ? 'Pantau seluruh pemeriksaan awal, konsultasi aktif, dan riwayat rekam medis klinik.'
+                            ? 'Kelola pemeriksaan, rekam medis, dan riwayat seluruh dokter di klinik ini.'
                             : practitioner
                               ? `${practitioner.name}${practitioner.specialization ? ` · ${practitioner.specialization}` : ''}`
                               : 'Akun ini belum terhubung ke data practitioner aktif.'
@@ -198,13 +199,16 @@ function QueueRow({
             </div>
             <div className="flex justify-end">
                 {encounter.can_start ? (
-                    <Button
-                        onClick={() =>
-                            router.post(startConsultation.url(encounter.uuid))
-                        }
-                    >
-                        <Play /> Mulai Pemeriksaan
-                    </Button>
+                    <Form {...startConsultation.form(encounter.uuid)}>
+                        {({ processing }) => (
+                            <Button type="submit" disabled={processing}>
+                                {processing ? <Spinner /> : <Play />}{' '}
+                                {processing
+                                    ? 'Membuka...'
+                                    : 'Mulai Pemeriksaan'}
+                            </Button>
+                        )}
+                    </Form>
                 ) : (
                     <Button asChild variant="outline">
                         <Link href={editMedicalRecord(encounter.uuid)}>
@@ -250,6 +254,8 @@ function age(birthDate: string) {
 
 function formatTime(value: string) {
     return new Intl.DateTimeFormat('id-ID', {
+        day: '2-digit',
+        month: 'short',
         hour: '2-digit',
         minute: '2-digit',
     }).format(new Date(value));
