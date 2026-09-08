@@ -20,6 +20,6 @@ class MedicineStockAdjustmentController extends Controller
         );
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Stok obat berhasil disesuaikan dan dicatat.']);
 
-        return to_route('pharmacy.index', ['mode' => 'stock']);
+        return back(fallback: route('pharmacy.index', ['mode' => 'stock']));
     }
 }

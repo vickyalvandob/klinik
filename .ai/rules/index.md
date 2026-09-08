@@ -14,6 +14,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | app/Actions/*Payment.php,app/Actions/_Invoice.php,app/Models/Invoice_.php,app/Models/Payment.php                                                                 | .ai/rules/models-models.md   |
 | app/Actions/*Prescription.php,app/Models/MedicineStock.php,app/Models/StockMovement.php,app/Models/PrescriptionAudit.php                                         | .ai/rules/models.md          |
 | app/Http/Controllers/PatientController.php,resources/js/pages/patients/**                                                                                        | .ai/rules/patients.md        |
+| app/Http/Controllers/PharmacyController.php,resources/js/pages/pharmacy/**                                                                                       | .ai/rules/pharmacy.md        |
 | app/Actions/CallQueue.php,app/Services/QueueBoard.php,app/Http/Controllers/Queue*.php,app/Http/Middleware/HandleInertiaRequests.php,resources/js/pages/queues/** | .ai/rules/queues.md          |
 | app/Support/**,app/Http/**,database/seeders/**,resources/js/**                                                                                                   | .ai/rules/seeders-js.md      |
 | app/Actions/**,app/Policies/**,app/Support/**,app/Http/**,resources/js/**                                                                                        | .ai/rules/support-http-js.md |

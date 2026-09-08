@@ -1,6 +1,13 @@
 import type { Paginator } from './encounter';
 
 export type PharmacyMode = 'new' | 'processing' | 'history' | 'stock';
+export type PharmacyStockStatus = 'all' | 'low' | 'empty' | 'inactive';
+export type PharmacyFilters = {
+    mode: PharmacyMode;
+    search?: string;
+    date?: string;
+    page?: number;
+};
 
 export type PharmacyPrescriptionListItem = {
     uuid: string;
@@ -9,6 +16,7 @@ export type PharmacyPrescriptionListItem = {
     prescribed_at: string | null;
     processing_started_at: string | null;
     dispensed_at: string | null;
+    cancelled_at: string | null;
     items_count: number;
     patient: { name: string; medical_record_number: string };
     doctor: string;
@@ -62,6 +70,8 @@ export type PharmacyPrescription = {
         timing_text: string | null;
         duration_text: string | null;
         stock: string;
+        required_quantity: number;
+        stock_sufficient: boolean;
     }>;
     audits: Array<{ action: string; actor: string; created_at: string }>;
 };

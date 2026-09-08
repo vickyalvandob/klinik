@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BillingIndexRequest;
 use App\InvoiceStatus;
 use App\Models\BillingAudit;
 use App\Models\Invoice;
@@ -12,7 +13,6 @@ use App\PaymentStatus;
 use App\Support\Tenancy\CurrentClinic;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -22,7 +22,7 @@ class BillingController extends Controller
 {
     public function __construct(private readonly CurrentClinic $currentClinic) {}
 
-    public function index(Request $request): Response
+    public function index(BillingIndexRequest $request): Response
     {
         Gate::authorize('viewAny', Invoice::class);
 
@@ -33,7 +33,9 @@ class BillingController extends Controller
             default => 'outstanding',
         };
         $search = $request->string('search')->trim()->toString();
-        $reconciliationDate = $this->reconciliationDate($request->string('date')->toString());
+        $reconciliationDate = $request->filled('date')
+            ? $request->string('date')->toString()
+            : now($this->currentClinic->get()->timezone)->toDateString();
         $statuses = match ($mode) {
             'partial' => [InvoiceStatus::PartiallyPaid->value],
             'paid' => [InvoiceStatus::Paid->value],
@@ -41,9 +43,11 @@ class BillingController extends Controller
             default => [InvoiceStatus::Issued->value],
         };
 
-        $invoices = Invoice::query()
+        $direction = in_array($mode, ['outstanding', 'partial'], true) ? 'asc' : 'desc';
+        $invoices = fn () => Invoice::query()
             ->where('clinic_id', $this->currentClinic->id())
             ->whereIn('status', $statuses)
+            ->select(['id', 'uuid', 'patient_id', 'encounter_id', 'invoice_number', 'status', 'total_amount', 'paid_amount', 'balance_due', 'issued_at'])
             ->with([
                 'patient:id,medical_record_number,name',
                 'encounter:id,registration_number',
@@ -56,8 +60,8 @@ class BillingController extends Controller
                     ->orWhereHas('encounter', fn (Builder $encounter) => $encounter
                         ->where('registration_number', 'like', "%{$search}%"));
             }))
-            ->orderByDesc('issued_at')
-            ->orderByDesc('id')
+            ->orderBy('issued_at', $direction)
+            ->orderBy('id', $direction)
             ->paginate(20)
             ->withQueryString()
             ->through(fn (Invoice $invoice): array => [
@@ -76,21 +80,14 @@ class BillingController extends Controller
                 'registration_number' => $invoice->encounter->registration_number,
             ]);
 
-        $summaryQuery = fn (): Builder => Invoice::query()->where('clinic_id', $this->currentClinic->id());
-        $outstandingStatuses = [InvoiceStatus::Issued->value, InvoiceStatus::PartiallyPaid->value];
-
         return Inertia::render('billing/index', [
             'mode' => $mode,
             'search' => $search,
             'date' => $reconciliationDate,
+            'today' => now($this->currentClinic->get()->timezone)->toDateString(),
             'invoices' => $invoices,
-            'summary' => [
-                'outstanding_count' => $summaryQuery()->whereIn('status', $outstandingStatuses)->count(),
-                'outstanding_amount' => (int) $summaryQuery()->whereIn('status', $outstandingStatuses)->sum('balance_due'),
-                'partial_count' => $summaryQuery()->where('status', InvoiceStatus::PartiallyPaid->value)->count(),
-                'paid_count' => $summaryQuery()->where('status', InvoiceStatus::Paid->value)->count(),
-            ],
-            'reconciliation' => $this->reconciliation($reconciliationDate),
+            'summary' => fn (): array => $this->summary(),
+            'reconciliation' => fn (): array => $this->reconciliation($reconciliationDate),
         ]);
     }
 
@@ -185,22 +182,34 @@ class BillingController extends Controller
         ]);
     }
 
-    private function reconciliationDate(string $candidate): string
+    /** @return array<string, int> */
+    private function summary(): array
     {
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $candidate, $matches) === 1
-            && checkdate((int) $matches[2], (int) $matches[3], (int) $matches[1])) {
-            return $candidate;
-        }
+        $rows = Invoice::query()->where('clinic_id', $this->currentClinic->id())
+            ->toBase()->select('status')
+            ->selectRaw('COUNT(*) as count, SUM(balance_due) as amount')
+            ->groupBy('status')->get()->keyBy('status');
+        $issuedCount = (int) ($rows->get(InvoiceStatus::Issued->value)?->count ?? 0);
+        $partialCount = (int) ($rows->get(InvoiceStatus::PartiallyPaid->value)?->count ?? 0);
 
-        return now($this->currentClinic->get()->timezone)->toDateString();
+        return [
+            'outstanding_count' => $issuedCount + $partialCount,
+            'outstanding_amount' => (int) ($rows->get(InvoiceStatus::Issued->value)?->amount ?? 0)
+                + (int) ($rows->get(InvoiceStatus::PartiallyPaid->value)?->amount ?? 0),
+            'issued_count' => $issuedCount,
+            'partial_count' => $partialCount,
+            'paid_count' => (int) ($rows->get(InvoiceStatus::Paid->value)?->count ?? 0),
+            'voided_count' => (int) ($rows->get(InvoiceStatus::Voided->value)?->count ?? 0),
+        ];
     }
 
     /** @return array<string, mixed> */
     private function reconciliation(string $date): array
     {
         $timezone = $this->currentClinic->get()->timezone;
-        $start = CarbonImmutable::parse($date, $timezone)->startOfDay()->utc();
-        $end = $start->addDay();
+        $localStart = CarbonImmutable::parse($date, $timezone)->startOfDay();
+        $start = $localStart->setTimezone(config('app.timezone'));
+        $end = $localStart->addDay()->setTimezone(config('app.timezone'));
         $rows = Payment::query()
             ->where('clinic_id', $this->currentClinic->id())
             ->where('received_at', '>=', $start)
