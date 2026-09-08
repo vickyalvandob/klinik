@@ -29,26 +29,11 @@ class MedicalRecordController extends Controller
     {
         Gate::authorize('viewEncounter', [MedicalRecord::class, $encounter]);
 
-        $encounter->load([
-            'patient:id,uuid,medical_record_number,name,birth_date,gender,blood_type',
-            'patient.allergies' => fn ($query) => $query
-                ->where('status', 'active')
-                ->orderBy('substance')
-                ->select(['id', 'patient_id', 'substance', 'reaction', 'severity']),
-            'serviceUnit:id,uuid,name',
-            'practitioner:id,uuid,staff_profile_id,specialization',
-            'practitioner.staffProfile:id,name',
-            'queueEntry:id,encounter_id,queue_number',
-            'triage',
-            'medicalRecord.diagnoses.catalog',
-            'medicalRecord.procedures.service',
-            'medicalRecord.prescription.items.medicine',
-            'medicalRecord.amendments' => fn ($query) => $query->with('creator:id,name')->oldest(),
-        ]);
+        $encounter->loadMissing('medicalRecord');
 
         $accessRecorder->record($encounter, $request);
 
-        $previousEncounters = Encounter::query()
+        $previousEncounters = fn (): array => Encounter::query()
             ->where('clinic_id', $encounter->clinic_id)
             ->where('patient_id', $encounter->patient_id)
             ->whereKeyNot($encounter->id)
@@ -68,6 +53,7 @@ class MedicalRecordController extends Controller
             ->get()
             ->each(fn (Encounter $previous) => $accessRecorder->record($previous, $request, 'history_view'))
             ->map(fn (Encounter $previous): array => [
+                'uuid' => $previous->uuid,
                 'date' => $previous->encounter_date->toDateString(),
                 'doctor' => $previous->practitioner->staffProfile->name,
                 'assessment' => $previous->medicalRecord?->assessment,
@@ -78,15 +64,16 @@ class MedicalRecordController extends Controller
                         'display' => $diagnosis->display,
                         'type' => $diagnosis->diagnosis_type->value,
                     ])->values(),
-            ]);
+            ])->all();
 
         return Inertia::render('medical-records/edit', [
-            'encounter' => $this->encounterData($encounter),
-            'previousEncounters' => $previousEncounters,
-            'files' => $encounter->medicalRecord === null ? [] : MedicalRecordFile::query()
+            'encounter' => fn (): array => $this->encounterData($encounter),
+            'previousEncounters' => Inertia::optional($previousEncounters),
+            'files' => fn () => $encounter->medicalRecord === null ? [] : MedicalRecordFile::query()
                 ->where('clinic_id', $encounter->clinic_id)->where('medical_record_id', $encounter->medicalRecord->id)
                 ->latest('id')->get(['uuid', 'original_name', 'size', 'created_at']),
-            'can' => [
+            'can' => fn (): array => [
+                'view_patient' => Gate::allows('view', $encounter->patient),
                 'start' => Gate::allows('start', [MedicalRecord::class, $encounter]),
                 'save' => Gate::allows('save', [MedicalRecord::class, $encounter]),
                 'finalize' => Gate::allows('finalize', [MedicalRecord::class, $encounter]),
@@ -124,6 +111,23 @@ class MedicalRecordController extends Controller
     /** @return array<string, mixed> */
     private function encounterData(Encounter $encounter): array
     {
+        $encounter->loadMissing([
+            'patient:id,tenant_id,uuid,medical_record_number,name,birth_date,gender,blood_type',
+            'patient.allergies' => fn ($query) => $query
+                ->where('status', 'active')
+                ->orderBy('substance')
+                ->select(['id', 'patient_id', 'substance', 'reaction', 'severity']),
+            'serviceUnit:id,uuid,name',
+            'practitioner:id,uuid,staff_profile_id,specialization',
+            'practitioner.staffProfile:id,name',
+            'queueEntry:id,encounter_id,queue_number',
+            'triage',
+            'medicalRecord.diagnoses.catalog',
+            'medicalRecord.procedures.service',
+            'medicalRecord.prescription.items.medicine',
+            'medicalRecord.amendments' => fn ($query) => $query->with('creator:id,name')->oldest(),
+        ]);
+
         $medicalRecord = $encounter->medicalRecord;
 
         return [
@@ -168,6 +172,7 @@ class MedicalRecordController extends Controller
                 'status' => $medicalRecord->status->value,
                 'status_label' => $medicalRecord->status->label(),
                 'finalized_at' => $medicalRecord->finalized_at?->toIso8601String(),
+                'updated_at' => $medicalRecord->updated_at->toIso8601String(),
                 'diagnoses' => $medicalRecord->diagnoses->map(fn (Diagnosis $diagnosis): array => [
                     'catalog_id' => $diagnosis->getRelation('catalog') instanceof DiagnosisCatalog
                         ? $diagnosis->getRelation('catalog')->uuid

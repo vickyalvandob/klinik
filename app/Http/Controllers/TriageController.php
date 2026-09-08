@@ -34,7 +34,7 @@ class TriageController extends Controller
         $search = Str::squish($request->string('search')->toString());
         $unit = $request->string('service_unit')->toString();
 
-        $encounters = fn () => Encounter::query()
+        $encounters = fn (): array => Encounter::query()
             ->where('clinic_id', $clinic->id)
             ->where('encounter_date', '<', $nextDate)
             ->when(
@@ -74,24 +74,24 @@ class TriageController extends Controller
                 $triage = $encounter->triage;
 
                 return [
-                'uuid' => $encounter->uuid,
-                'registered_at' => $encounter->registered_at->toIso8601String(),
-                'chief_complaint' => $encounter->chief_complaint,
-                'patient' => [
-                    'medical_record_number' => $encounter->patient->medical_record_number,
-                    'name' => $encounter->patient->name,
-                    'birth_date' => $encounter->patient->birth_date->toDateString(),
-                    'gender' => $encounter->patient->gender,
-                    'allergies' => $encounter->patient->allergies->pluck('substance')->values(),
-                ],
-                'service_unit' => $encounter->serviceUnit->name,
-                'practitioner' => $encounter->practitioner->staffProfile->name,
-                'queue_number' => $encounter->queueEntry->queue_number,
-                'triage_status' => $triage?->status->value,
-                'triage_updated_at' => $triage?->updated_at?->toIso8601String(),
-                'completed_at' => $triage?->completed_at?->toIso8601String(),
+                    'uuid' => $encounter->uuid,
+                    'registered_at' => $encounter->registered_at->toIso8601String(),
+                    'chief_complaint' => $encounter->chief_complaint,
+                    'patient' => [
+                        'medical_record_number' => $encounter->patient->medical_record_number,
+                        'name' => $encounter->patient->name,
+                        'birth_date' => $encounter->patient->birth_date->toDateString(),
+                        'gender' => $encounter->patient->gender,
+                        'allergies' => $encounter->patient->allergies->pluck('substance')->values(),
+                    ],
+                    'service_unit' => $encounter->serviceUnit->name,
+                    'practitioner' => $encounter->practitioner->staffProfile->name,
+                    'queue_number' => $encounter->queueEntry->queue_number,
+                    'triage_status' => $triage?->status->value,
+                    'triage_updated_at' => $triage?->updated_at?->toIso8601String(),
+                    'completed_at' => $triage?->completed_at?->toIso8601String(),
                 ];
-            });
+            })->toArray();
 
         return Inertia::render('triages/index', [
             'encounters' => $encounters,

@@ -6,10 +6,12 @@ use App\Models\ClinicService;
 use App\Models\DiagnosisCatalog;
 use App\Models\Encounter;
 use App\Models\MedicalRecord;
+use App\Models\MedicalRecordAccessLog;
 use App\Models\MedicalRecordAmendment;
 use App\Models\MedicalRecordAudit;
 use App\Models\Medicine;
 use App\Models\Prescription;
+use App\Models\QueueEntry;
 use App\Models\Role;
 use App\PrescriptionStatus;
 use App\SystemRole;
@@ -60,6 +62,7 @@ test('owner manages clinical records without a practitioner link and preserves t
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('medical-records/edit')
+            ->where('can.view_patient', true)
             ->where('can.save', true)
             ->where('can.finalize', true));
 
@@ -291,3 +294,95 @@ function clinicalPayload(string $diagnosisUuid, string $serviceUuid, string $med
         ]],
     ];
 }
+
+test('medical record search matches names and identifiers inside the assigned clinic scope', function () {
+    $context = clinicalEncounter($this);
+    $foreign = clinicalEncounter($this);
+    $context['patient']->forceFill(['name' => 'Pasien Pencarian'])->save();
+    $foreign['patient']->forceFill(['name' => 'Pasien Pencarian'])->save();
+    $this->actingAs($context['user'])->withSession(['current_clinic_id' => $context['clinic']->id]);
+
+    foreach (['Pasien Pencarian', $context['patient']->medical_record_number, $context['encounter']->registration_number] as $search) {
+        $this->get(route('doctor-queue.index', ['search' => $search]))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->has('encounters.data', 1)
+                ->where('encounters.data.0.uuid', $context['encounter']->uuid)
+                ->where('filters.search', $search));
+    }
+    $this->get(route('doctor-queue.index', ['search' => "' OR 1=1 --"]))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->has('encounters.data', 0)->where('summary.waiting', 1));
+});
+
+test('medical record date filters include the entire selected day and validate reversed dates', function () {
+    $context = clinicalEncounter($this);
+    $context['encounter']->forceFill(['encounter_date' => '2026-01-10'])->save();
+    $this->actingAs($context['user'])->get(route('doctor-queue.index', ['from' => '2026-01-10', 'to' => '2026-01-10']))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 1));
+    $this->get(route('doctor-queue.index', ['to' => '2026-01-09']))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 0));
+    $this->get(route('doctor-queue.index', ['from' => '2026-01-11', 'to' => '2026-01-10']))
+        ->assertSessionHasErrors(['to' => 'Tanggal akhir harus sama atau setelah tanggal awal.']);
+});
+
+test('medical record filters reject malformed input', function (array $filters, string $field, string $message) {
+    $context = clinicalEncounter($this);
+    $this->actingAs($context['user'])->get(route('doctor-queue.index', $filters))
+        ->assertSessionHasErrors([$field => $message]);
+})->with([
+    'invalid date' => [['from' => 'invalid'], 'from', 'Tanggal awal tidak valid.'],
+    'long search' => [['search' => str_repeat('a', 101)], 'search', 'Pencarian maksimal 100 karakter.'],
+]);
+
+test('medical history lists newest visits first and paginates filtered results', function () {
+    $context = clinicalEncounter($this);
+    $context['encounter']->forceFill(['status' => EncounterStatus::Completed, 'registered_at' => '2026-01-01 08:00:00'])->save();
+    $newest = null;
+    for ($index = 1; $index <= 15; $index++) {
+        $visit = Encounter::factory()->create([
+            'tenant_id' => $context['tenant']->id, 'clinic_id' => $context['clinic']->id,
+            'patient_id' => $context['patient']->id, 'service_unit_id' => $context['serviceUnit']->id,
+            'practitioner_id' => $context['practitioner']->id, 'status' => EncounterStatus::Completed,
+            'registration_sequence' => 100 + $index, 'registration_number' => 'HISTORY-'.$index,
+            'encounter_date' => '2026-01-02', 'registered_at' => '2026-01-02 08:00:00',
+        ]);
+        QueueEntry::factory()->create([
+            'encounter_id' => $visit->id,
+            'tenant_id' => $visit->tenant_id, 'clinic_id' => $visit->clinic_id,
+            'service_unit_id' => $visit->service_unit_id, 'practitioner_id' => $visit->practitioner_id,
+            'queue_date' => '2026-01-02', 'queue_sequence' => 100 + $index, 'queue_number' => 'A'.(100 + $index),
+            'status' => 'completed',
+        ]);
+        $newest = $visit;
+    }
+    $this->actingAs($context['user'])->get(route('doctor-queue.index', ['mode' => 'history']))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 15)
+        ->where('encounters.total', 16)->where('encounters.data.0.uuid', $newest->uuid)
+        ->reloadOnly(['encounters', 'mode', 'filters'], fn (Assert $reload) => $reload->missing('summary')->has('encounters.data', 15)));
+    $this->get(route('doctor-queue.index', ['mode' => 'history', 'page' => 2]))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 1)
+        ->where('encounters.data.0.uuid', $context['encounter']->uuid));
+});
+
+test('previous clinical history is loaded and audited only when requested', function () {
+    $context = startedClinicalEncounter($this);
+    $previous = Encounter::factory()->create([
+        'tenant_id' => $context['tenant']->id, 'clinic_id' => $context['clinic']->id,
+        'patient_id' => $context['patient']->id, 'service_unit_id' => $context['serviceUnit']->id,
+        'practitioner_id' => $context['practitioner']->id, 'status' => EncounterStatus::Completed,
+        'registration_sequence' => 100, 'registration_number' => 'PREVIOUS-100',
+        'encounter_date' => '2026-01-01',
+    ]);
+    MedicalRecord::factory()->create([
+        'tenant_id' => $context['tenant']->id, 'clinic_id' => $context['clinic']->id,
+        'encounter_id' => $previous->id, 'patient_id' => $previous->patient_id,
+        'practitioner_id' => $previous->practitioner_id, 'status' => MedicalRecordStatus::Final,
+        'assessment' => 'Riwayat penilaian klinis', 'plan' => 'Kontrol',
+    ]);
+    $this->actingAs($context['user'])->get(route('medical-records.edit', $context['encounter']))
+        ->assertOk()->assertInertia(fn (Assert $page) => $page->missing('previousEncounters'));
+    expect(MedicalRecordAccessLog::withoutGlobalScopes()->where('action', 'history_view')->count())->toBe(0);
+    $this->get(route('medical-records.edit', $context['encounter']))->assertInertia(fn (Assert $page) => $page
+        ->reloadOnly('previousEncounters', fn (Assert $reload) => $reload->missing('encounter')
+            ->has('previousEncounters', 1)->where('previousEncounters.0.uuid', $previous->uuid)
+            ->where('previousEncounters.0.assessment', 'Riwayat penilaian klinis')));
+    expect(MedicalRecordAccessLog::withoutGlobalScopes()->where('action', 'history_view')->count())->toBe(1);
+});

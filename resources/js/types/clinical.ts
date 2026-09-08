@@ -1,5 +1,4 @@
 import type { Paginator } from './encounter';
-
 export type DoctorQueueEncounter = {
     uuid: string;
     registered_at: string;
@@ -14,6 +13,7 @@ export type DoctorQueueEncounter = {
         allergies: string[];
     };
     service_unit: string;
+    practitioner: string;
     queue_number: string;
     medical_record: {
         status: 'draft' | 'final' | 'amended';
@@ -22,23 +22,19 @@ export type DoctorQueueEncounter = {
     } | null;
     can_start: boolean;
 };
-
 export type DoctorQueuePage = Paginator<DoctorQueueEncounter>;
-
 export type DiagnosisOption = {
     uuid: string;
     code_system: string;
     code: string;
     display: string;
 };
-
 export type ServiceOption = {
     uuid: string;
     code: string;
     name: string;
     price: string;
 };
-
 export type MedicineOption = {
     uuid: string;
     code: string;
@@ -48,7 +44,6 @@ export type MedicineOption = {
     dosage_form: string;
     unit: string;
 };
-
 export type ClinicalEncounter = {
     uuid: string;
     registration_number: string;
@@ -96,6 +91,7 @@ export type ClinicalEncounter = {
         additional_notes: string | null;
         status: 'draft' | 'final' | 'amended';
         status_label: string;
+        updated_at: string;
         finalized_at: string | null;
         diagnoses: DiagnosisRow[];
         procedures: ProcedureRow[];
@@ -109,7 +105,6 @@ export type ClinicalEncounter = {
         }>;
     } | null;
 };
-
 export type DiagnosisRow = {
     catalog_id: string;
     code_system: string;
@@ -118,7 +113,6 @@ export type DiagnosisRow = {
     type: 'primary' | 'secondary';
     notes: string | null;
 };
-
 export type ProcedureRow = {
     service_id: string;
     code: string;
@@ -126,7 +120,6 @@ export type ProcedureRow = {
     price: number;
     notes: string | null;
 };
-
 export type PrescriptionRow = {
     medicine_id: string;
     name: string;
@@ -141,8 +134,8 @@ export type PrescriptionRow = {
     instruction: string;
     notes: string | null;
 };
-
 export type PreviousEncounter = {
+    uuid: string;
     date: string;
     doctor: string;
     assessment: string | null;
