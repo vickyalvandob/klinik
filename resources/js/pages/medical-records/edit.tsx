@@ -4,10 +4,8 @@ import {
     ArrowLeft,
     ClipboardPlus,
     CheckCircle2,
-    FileText,
     History,
     LockKeyhole,
-    Pill,
     Save,
     Stethoscope,
     Trash2,
@@ -34,7 +32,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import {
+    Sheet,
+    SheetTrigger,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from '@/components/ui/sheet';
 import { ClinicalCatalogPicker } from '@/components/clinical-catalog-picker';
 import { store as startConsultation } from '@/routes/consultations';
 import { index as doctorQueue } from '@/routes/doctor-queue';
@@ -97,6 +102,7 @@ function MedicalRecordWorkspace({
         'draft',
     );
     const allowNavigation = useRef(false);
+    const pendingFocusField = useRef<string | null>(null);
     const [pendingNavigation, setPendingNavigation] = useState<
         (() => void) | null
     >(null);
@@ -158,6 +164,12 @@ function MedicalRecordWorkspace({
     const ready = requirements.every((item) => item.done);
     const incomplete = requirements.filter((item) => !item.done);
     const focusField = (field: string) => {
+        if (confirmFinalization) {
+            pendingFocusField.current = field;
+            setConfirmFinalization(false);
+            return;
+        }
+
         setSection(
             field.startsWith('prescription') || field.startsWith('procedures')
                 ? 'orders'
@@ -257,31 +269,58 @@ function MedicalRecordWorkspace({
                                 <div className="bg-muted/30 flex items-start gap-3 rounded-lg border p-4 text-sm">
                                     <LockKeyhole className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                                     <div>
-                                        <p className="font-medium">Pemeriksaan telah selesai</p>
-                                        <p className="text-muted-foreground mt-1 text-xs">Rekam medis terkunci. {can.amend ? 'Tambahkan koreksi melalui bagian Catatan & berkas.' : 'Data ditampilkan untuk dibaca.'}</p>
+                                        <p className="font-medium">
+                                            Pemeriksaan telah selesai
+                                        </p>
+                                        <p className="text-muted-foreground mt-1 text-xs">
+                                            Rekam medis terkunci.{' '}
+                                            {can.amend
+                                                ? 'Tambahkan koreksi melalui bagian Catatan.'
+                                                : 'Data ditampilkan untuk dibaca.'}
+                                        </p>
                                     </div>
                                 </div>
                             )}
                             <Sheet>
                                 <SheetTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-between xl:hidden">
-                                        <span className="flex items-center gap-2"><PanelRightOpen /> Info pasien & riwayat</span>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-between xl:hidden"
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <PanelRightOpen /> Info pasien &
+                                            riwayat
+                                        </span>
                                         <ChevronRight />
                                     </Button>
                                 </SheetTrigger>
                                 <SheetContent className="w-full gap-0 sm:max-w-md">
                                     <SheetHeader className="border-b pr-12">
-                                        <SheetTitle>Info pasien & riwayat</SheetTitle>
-                                        <SheetDescription>{encounter.patient.name} · {encounter.patient.medical_record_number}</SheetDescription>
+                                        <SheetTitle>
+                                            Info pasien & riwayat
+                                        </SheetTitle>
+                                        <SheetDescription>
+                                            {encounter.patient.name} ·{' '}
+                                            {
+                                                encounter.patient
+                                                    .medical_record_number
+                                            }
+                                        </SheetDescription>
                                     </SheetHeader>
                                     <div className="grid gap-4 overflow-y-auto p-4">
                                         <TriageSection encounter={encounter} />
-                                        <ContextPanel encounter={encounter} previousEncounters={previousEncounters} canViewPatient={can.view_patient} />
+                                        <ContextPanel
+                                            encounter={encounter}
+                                            previousEncounters={
+                                                previousEncounters
+                                            }
+                                            canViewPatient={can.view_patient}
+                                        />
                                     </div>
                                 </SheetContent>
                             </Sheet>
                             <nav
-                                className="bg-muted/30 flex gap-1 rounded-lg border p-1"
+                                className="flex gap-1 border-b"
                                 aria-label="Bagian rekam medis"
                             >
                                 {(
@@ -289,37 +328,30 @@ function MedicalRecordWorkspace({
                                         {
                                             value: 'clinical',
                                             label: 'Pemeriksaan',
-                                            icon: Stethoscope,
-                                            count: form.data.diagnoses.length ? `${form.data.diagnoses.length} diagnosis` : 'Wajib diisi',
                                         },
                                         {
                                             value: 'orders',
                                             label: 'Tindakan & resep',
-                                            icon: Pill,
-                                            count: `${form.data.procedures.length} tindakan · ${form.data.prescription_items.length} obat`,
                                         },
                                         {
                                             value: 'additional',
-                                            label: 'Catatan & berkas',
-                                            icon: FileText,
-                                            count: 'Opsional',
+                                            label: 'Catatan',
                                         },
                                     ] as const
-                                ).map(({ value, label, icon: Icon, count }) => (
+                                ).map(({ value, label }) => (
                                     <Button
                                         key={value}
                                         variant="ghost"
                                         size="sm"
                                         aria-pressed={section === value}
                                         className={cn(
-                                            'h-auto min-h-16 min-w-0 flex-1 flex-col gap-1 px-2 text-xs whitespace-normal sm:text-sm',
+                                            '-mb-px h-11 min-w-0 flex-1 rounded-none border-b-2 border-transparent px-2 text-xs sm:flex-none sm:px-4 sm:text-sm',
                                             section === value &&
-                                                'bg-background text-primary border',
+                                                'border-primary text-primary',
                                         )}
                                         onClick={() => setSection(value)}
                                     >
-                                        <span className="flex items-center gap-1.5"><Icon className="hidden size-4 shrink-0 sm:block" />{label}</span>
-                                        <span className="text-muted-foreground text-[10px] font-normal sm:text-xs">{count}</span>
+                                        {label}
                                     </Button>
                                 ))}
                             </nav>
@@ -349,495 +381,502 @@ function MedicalRecordWorkspace({
                                     </div>
                                 </div>
                             )}
-                            {section === 'clinical' && <div
-                                className="space-y-5"
-                            >
-                                <Section
-                                    number="1"
-                                    title="Catatan pemeriksaan"
-                                    description="Lengkapi keluhan, penilaian, dan rencana sebelum finalisasi. Temuan objektif dapat ditambahkan sesuai pemeriksaan."
-                                >
-                                    {can.save &&
-                                        !locked &&
-                                        !form.data.subjective && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="justify-self-start"
-                                                onClick={() =>
+                            {section === 'clinical' && (
+                                <div className="space-y-5">
+                                    <Section
+                                        title="Catatan pemeriksaan"
+                                        action={
+                                            can.save &&
+                                            !locked &&
+                                            !form.data.subjective && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-muted-foreground h-8 px-2 text-xs"
+                                                    onClick={() =>
+                                                        form.setData(
+                                                            'subjective',
+                                                            encounter.triage
+                                                                ?.chief_complaint ||
+                                                                encounter.chief_complaint,
+                                                        )
+                                                    }
+                                                >
+                                                    Salin keluhan
+                                                </Button>
+                                            )
+                                        }
+                                    >
+                                        <div className="grid gap-5 lg:grid-cols-2">
+                                            <TextAreaField
+                                                id="subjective"
+                                                label="Keluhan & riwayat (S)"
+                                                required
+                                                value={form.data.subjective}
+                                                onChange={(value) =>
                                                     form.setData(
                                                         'subjective',
-                                                        encounter.triage
-                                                            ?.chief_complaint ||
-                                                            encounter.chief_complaint,
+                                                        value,
                                                     )
                                                 }
-                                            >
-                                                Gunakan keluhan pemeriksaan awal
-                                            </Button>
+                                                error={form.errors.subjective}
+                                                disabled={!can.save || locked}
+                                                placeholder="Keluhan dan riwayat pasien"
+                                            />
+                                            <TextAreaField
+                                                id="objective"
+                                                label="Temuan objektif (O)"
+                                                value={form.data.objective}
+                                                onChange={(value) =>
+                                                    form.setData(
+                                                        'objective',
+                                                        value,
+                                                    )
+                                                }
+                                                error={form.errors.objective}
+                                                disabled={!can.save || locked}
+                                                placeholder="Hasil pemeriksaan fisik"
+                                            />
+                                            <TextAreaField
+                                                id="assessment"
+                                                label="Penilaian klinis (A)"
+                                                required
+                                                value={form.data.assessment}
+                                                onChange={(value) =>
+                                                    form.setData(
+                                                        'assessment',
+                                                        value,
+                                                    )
+                                                }
+                                                error={form.errors.assessment}
+                                                disabled={!can.save || locked}
+                                                placeholder="Penilaian klinis"
+                                            />
+                                            <TextAreaField
+                                                id="plan"
+                                                label="Rencana perawatan (P)"
+                                                required
+                                                value={form.data.plan}
+                                                onChange={(value) =>
+                                                    form.setData('plan', value)
+                                                }
+                                                error={form.errors.plan}
+                                                disabled={!can.save || locked}
+                                                placeholder="Terapi, edukasi, atau tindak lanjut"
+                                            />
+                                        </div>
+                                    </Section>
+                                    <Section id="diagnoses" title="Diagnosis">
+                                        {!locked && can.save && (
+                                            <ClinicalCatalogPicker<DiagnosisOption>
+                                                resource="diagnoses"
+                                                placeholder="Cari kode atau nama diagnosis..."
+                                                render={(item) =>
+                                                    `${item.code} — ${item.display}`
+                                                }
+                                                onSelect={(item) => {
+                                                    const hasPrimary =
+                                                        form.data.diagnoses.some(
+                                                            (diagnosis) =>
+                                                                diagnosis.type ===
+                                                                'primary',
+                                                        );
+                                                    form.setData('diagnoses', [
+                                                        ...form.data.diagnoses,
+                                                        {
+                                                            catalog_id:
+                                                                item.uuid,
+                                                            code_system:
+                                                                item.code_system,
+                                                            code: item.code,
+                                                            display:
+                                                                item.display,
+                                                            type: hasPrimary
+                                                                ? 'secondary'
+                                                                : 'primary',
+                                                            notes: null,
+                                                        },
+                                                    ]);
+                                                }}
+                                                exclude={form.data.diagnoses.map(
+                                                    (item) => item.catalog_id,
+                                                )}
+                                            />
                                         )}
-                                    <div className="grid gap-5 lg:grid-cols-2">
-                                        <TextAreaField
-                                            id="subjective"
-                                            label="Keluhan & riwayat (S)"
-                                            required
-                                            value={form.data.subjective}
-                                            onChange={(value) =>
-                                                form.setData(
-                                                    'subjective',
-                                                    value,
-                                                )
-                                            }
-                                            error={form.errors.subjective}
-                                            disabled={!can.save || locked}
-                                            placeholder="Keluhan, riwayat penyakit, dan informasi dari pasien"
+                                        <InputErrorText
+                                            error={form.errors.diagnoses}
                                         />
-                                        <TextAreaField
-                                            id="objective"
-                                            label="Temuan objektif (O)"
-                                            value={form.data.objective}
-                                            onChange={(value) =>
-                                                form.setData('objective', value)
-                                            }
-                                            error={form.errors.objective}
-                                            disabled={!can.save || locked}
-                                            placeholder="Temuan pemeriksaan fisik dan objektif"
-                                        />
-                                        <TextAreaField
-                                            id="assessment"
-                                            label="Penilaian klinis (A)"
-                                            required
-                                            value={form.data.assessment}
-                                            onChange={(value) =>
-                                                form.setData(
-                                                    'assessment',
-                                                    value,
-                                                )
-                                            }
-                                            error={form.errors.assessment}
-                                            disabled={!can.save || locked}
-                                            placeholder="Penilaian klinis dokter"
-                                        />
-                                        <TextAreaField
-                                            id="plan"
-                                            label="Rencana perawatan (P)"
-                                            required
-                                            value={form.data.plan}
-                                            onChange={(value) =>
-                                                form.setData('plan', value)
-                                            }
-                                            error={form.errors.plan}
-                                            disabled={!can.save || locked}
-                                            placeholder="Rencana terapi, edukasi, kontrol, atau rujukan"
-                                        />
-                                    </div>
-                                </Section>
-                                <Section
-                                    number="2"
-                                    title="Diagnosis"
-                                    description="Pilih satu diagnosis utama dan tambahkan diagnosis sekunder bila diperlukan."
-                                >
-                                    {!locked && can.save && (
-                                        <ClinicalCatalogPicker<DiagnosisOption>
-                                            resource="diagnoses"
-                                            placeholder="Cari kode atau nama diagnosis..."
-                                            render={(item) =>
-                                                `${item.code} — ${item.display}`
-                                            }
-                                            onSelect={(item) => {
-                                                const hasPrimary =
-                                                    form.data.diagnoses.some(
-                                                        (diagnosis) =>
-                                                            diagnosis.type ===
-                                                            'primary',
-                                                    );
-                                                form.setData('diagnoses', [
-                                                    ...form.data.diagnoses,
-                                                    {
-                                                        catalog_id: item.uuid,
-                                                        code_system:
-                                                            item.code_system,
-                                                        code: item.code,
-                                                        display: item.display,
-                                                        type: hasPrimary
-                                                            ? 'secondary'
-                                                            : 'primary',
-                                                        notes: null,
-                                                    },
-                                                ]);
-                                            }}
-                                            exclude={form.data.diagnoses.map(
-                                                (item) => item.catalog_id,
-                                            )}
-                                        />
-                                    )}
-                                    <InputErrorText
-                                        error={form.errors.diagnoses}
-                                    />
-                                    <div className="grid gap-2">
-                                        {form.data.diagnoses.length === 0 ? (
-                                            <EmptyText text="Belum ada diagnosis." />
-                                        ) : (
-                                            form.data.diagnoses.map(
-                                                (diagnosis, index) => (
-                                                    <div
-                                                        key={`${diagnosis.catalog_id}-${index}`}
-                                                        className="bg-muted/20 grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-center"
-                                                    >
-                                                        <div>
-                                                            <p className="text-sm font-medium">
-                                                                {diagnosis.code}{' '}
-                                                                —{' '}
-                                                                {
-                                                                    diagnosis.display
+                                        <div className="grid gap-2">
+                                            {form.data.diagnoses.length ===
+                                            0 ? (
+                                                <EmptyText text="Belum ada diagnosis." />
+                                            ) : (
+                                                form.data.diagnoses.map(
+                                                    (diagnosis, index) => (
+                                                        <div
+                                                            key={`${diagnosis.catalog_id}-${index}`}
+                                                            className="bg-muted/20 grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-center"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-medium">
+                                                                    {
+                                                                        diagnosis.code
+                                                                    }{' '}
+                                                                    —{' '}
+                                                                    {
+                                                                        diagnosis.display
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                            <select
+                                                                aria-label={`Jenis diagnosis ${diagnosis.display}`}
+                                                                value={
+                                                                    diagnosis.type
                                                                 }
-                                                            </p>
-                                                            <p className="text-muted-foreground mt-1 text-xs">
-                                                                {
-                                                                    diagnosis.code_system
+                                                                disabled={
+                                                                    !can.save ||
+                                                                    locked
                                                                 }
-                                                            </p>
+                                                                className={
+                                                                    selectClassName
+                                                                }
+                                                                onChange={(
+                                                                    event,
+                                                                ) => {
+                                                                    const next =
+                                                                        [
+                                                                            ...form
+                                                                                .data
+                                                                                .diagnoses,
+                                                                        ];
+                                                                    const type =
+                                                                        event
+                                                                            .target
+                                                                            .value as DiagnosisRow['type'];
+                                                                    if (
+                                                                        type ===
+                                                                        'primary'
+                                                                    ) {
+                                                                        for (
+                                                                            let i = 0;
+                                                                            i <
+                                                                            next.length;
+                                                                            i++
+                                                                        )
+                                                                            next[
+                                                                                i
+                                                                            ] =
+                                                                                {
+                                                                                    ...next[
+                                                                                        i
+                                                                                    ],
+                                                                                    type: 'secondary',
+                                                                                };
+                                                                    }
+                                                                    next[
+                                                                        index
+                                                                    ] = {
+                                                                        ...next[
+                                                                            index
+                                                                        ],
+                                                                        type,
+                                                                    };
+                                                                    form.setData(
+                                                                        'diagnoses',
+                                                                        next,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <option value="primary">
+                                                                    Utama
+                                                                </option>
+                                                                <option value="secondary">
+                                                                    Sekunder
+                                                                </option>
+                                                            </select>
+                                                            {!locked &&
+                                                                can.save && (
+                                                                    <RemoveButton
+                                                                        label={`Hapus ${diagnosis.display}`}
+                                                                        onClick={() =>
+                                                                            form.setData(
+                                                                                'diagnoses',
+                                                                                form.data.diagnoses.filter(
+                                                                                    (
+                                                                                        _,
+                                                                                        rowIndex,
+                                                                                    ) =>
+                                                                                        rowIndex !==
+                                                                                        index,
+                                                                                ),
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                )}
                                                         </div>
-                                                        <select
-                                                            aria-label={`Jenis diagnosis ${diagnosis.display}`}
-                                                            value={
-                                                                diagnosis.type
-                                                            }
+                                                    ),
+                                                )
+                                            )}
+                                        </div>
+                                    </Section>
+                                </div>
+                            )}
+                            {section === 'orders' && (
+                                <div className="space-y-5">
+                                    <Section id="procedures" title="Tindakan">
+                                        {!locked && can.save && (
+                                            <ClinicalCatalogPicker<ServiceOption>
+                                                resource="services"
+                                                placeholder="Cari tindakan atau layanan..."
+                                                render={(item) =>
+                                                    `${item.code} — ${item.name} · ${rupiah(item.price)}`
+                                                }
+                                                onSelect={(item) =>
+                                                    form.setData('procedures', [
+                                                        ...form.data.procedures,
+                                                        {
+                                                            service_id:
+                                                                item.uuid,
+                                                            code: item.code,
+                                                            name: item.name,
+                                                            price: Number(
+                                                                item.price,
+                                                            ),
+                                                            notes: null,
+                                                        },
+                                                    ])
+                                                }
+                                                exclude={form.data.procedures.map(
+                                                    (item) => item.service_id,
+                                                )}
+                                            />
+                                        )}
+                                        <InputErrorText
+                                            error={form.errors.procedures}
+                                        />
+                                        <div className="grid gap-2">
+                                            {form.data.procedures.length ===
+                                            0 ? (
+                                                <EmptyText text="Belum ada tindakan." />
+                                            ) : (
+                                                form.data.procedures.map(
+                                                    (procedure, index) => (
+                                                        <div
+                                                            key={`${procedure.service_id}-${index}`}
+                                                            className="bg-muted/20 flex items-center justify-between gap-3 rounded-lg border p-3"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-medium">
+                                                                    {
+                                                                        procedure.name
+                                                                    }
+                                                                </p>
+                                                                <p className="text-muted-foreground mt-1 text-xs">
+                                                                    {
+                                                                        procedure.code
+                                                                    }{' '}
+                                                                    ·{' '}
+                                                                    {rupiah(
+                                                                        procedure.price,
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                            {!locked &&
+                                                                can.save && (
+                                                                    <RemoveButton
+                                                                        label={`Hapus ${procedure.name}`}
+                                                                        onClick={() =>
+                                                                            form.setData(
+                                                                                'procedures',
+                                                                                form.data.procedures.filter(
+                                                                                    (
+                                                                                        _,
+                                                                                        rowIndex,
+                                                                                    ) =>
+                                                                                        rowIndex !==
+                                                                                        index,
+                                                                                ),
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                )}
+                                                        </div>
+                                                    ),
+                                                )
+                                            )}
+                                        </div>
+                                    </Section>
+                                    <Section
+                                        id="prescription_items"
+                                        title="Resep"
+                                    >
+                                        {!locked && can.save && (
+                                            <ClinicalCatalogPicker<MedicineOption>
+                                                resource="medicines"
+                                                placeholder="Cari nama atau kode obat..."
+                                                render={(item) =>
+                                                    `${item.name}${item.strength ? ` ${item.strength}` : ''} · ${item.dosage_form}`
+                                                }
+                                                onSelect={(item) =>
+                                                    form.setData(
+                                                        'prescription_items',
+                                                        [
+                                                            ...form.data
+                                                                .prescription_items,
+                                                            {
+                                                                medicine_id:
+                                                                    item.uuid,
+                                                                name: item.name,
+                                                                strength:
+                                                                    item.strength,
+                                                                dosage_form:
+                                                                    item.dosage_form,
+                                                                quantity: 1,
+                                                                unit: item.unit,
+                                                                dose_text: '',
+                                                                frequency_text:
+                                                                    '',
+                                                                timing_text: '',
+                                                                duration_text:
+                                                                    '',
+                                                                instruction: '',
+                                                                notes: null,
+                                                            },
+                                                        ],
+                                                    )
+                                                }
+                                                exclude={form.data.prescription_items.map(
+                                                    (item) => item.medicine_id,
+                                                )}
+                                            />
+                                        )}
+                                        <InputErrorText
+                                            error={
+                                                form.errors.prescription_items
+                                            }
+                                        />
+                                        <div className="grid gap-3">
+                                            {form.data.prescription_items
+                                                .length === 0 ? (
+                                                <EmptyText text="Belum ada obat dalam resep." />
+                                            ) : (
+                                                form.data.prescription_items.map(
+                                                    (item, index) => (
+                                                        <PrescriptionItemEditor
+                                                            key={`${item.medicine_id}-${index}`}
+                                                            item={item}
+                                                            index={index}
                                                             disabled={
                                                                 !can.save ||
                                                                 locked
                                                             }
-                                                            className={
-                                                                selectClassName
-                                                            }
+                                                            errors={form.errors}
                                                             onChange={(
-                                                                event,
+                                                                changes,
                                                             ) => {
                                                                 const next = [
                                                                     ...form.data
-                                                                        .diagnoses,
+                                                                        .prescription_items,
                                                                 ];
-                                                                const type =
-                                                                    event.target
-                                                                        .value as DiagnosisRow['type'];
-                                                                if (
-                                                                    type ===
-                                                                    'primary'
-                                                                ) {
-                                                                    for (
-                                                                        let i = 0;
-                                                                        i <
-                                                                        next.length;
-                                                                        i++
-                                                                    )
-                                                                        next[
-                                                                            i
-                                                                        ] = {
-                                                                            ...next[
-                                                                                i
-                                                                            ],
-                                                                            type: 'secondary',
-                                                                        };
-                                                                }
                                                                 next[index] = {
                                                                     ...next[
                                                                         index
                                                                     ],
-                                                                    type,
+                                                                    ...changes,
                                                                 };
                                                                 form.setData(
-                                                                    'diagnoses',
+                                                                    'prescription_items',
                                                                     next,
                                                                 );
                                                             }}
-                                                        >
-                                                            <option value="primary">
-                                                                Utama
-                                                            </option>
-                                                            <option value="secondary">
-                                                                Sekunder
-                                                            </option>
-                                                        </select>
-                                                        {!locked &&
-                                                            can.save && (
-                                                                <RemoveButton
-                                                                    label={`Hapus ${diagnosis.display}`}
-                                                                    onClick={() =>
-                                                                        form.setData(
-                                                                            'diagnoses',
-                                                                            form.data.diagnoses.filter(
-                                                                                (
-                                                                                    _,
-                                                                                    rowIndex,
-                                                                                ) =>
-                                                                                    rowIndex !==
-                                                                                    index,
-                                                                            ),
-                                                                        )
-                                                                    }
-                                                                />
-                                                            )}
-                                                    </div>
-                                                ),
-                                            )
-                                        )}
-                                    </div>
-                                </Section>
-                            </div>}
-                            {section === 'orders' && <div
-                                className="space-y-5"
-                            >
-                                <Section
-                                    number="3"
-                                    title="Tindakan"
-                                    description="Tambahkan tindakan yang dilakukan pada kunjungan ini, bila ada."
-                                >
-                                    {!locked && can.save && (
-                                        <ClinicalCatalogPicker<ServiceOption>
-                                            resource="services"
-                                            placeholder="Cari tindakan atau layanan..."
-                                            render={(item) =>
-                                                `${item.code} — ${item.name} · ${rupiah(item.price)}`
-                                            }
-                                            onSelect={(item) =>
-                                                form.setData('procedures', [
-                                                    ...form.data.procedures,
-                                                    {
-                                                        service_id: item.uuid,
-                                                        code: item.code,
-                                                        name: item.name,
-                                                        price: Number(
-                                                            item.price,
-                                                        ),
-                                                        notes: null,
-                                                    },
-                                                ])
-                                            }
-                                            exclude={form.data.procedures.map(
-                                                (item) => item.service_id,
+                                                            onRemove={() =>
+                                                                form.setData(
+                                                                    'prescription_items',
+                                                                    form.data.prescription_items.filter(
+                                                                        (
+                                                                            _,
+                                                                            rowIndex,
+                                                                        ) =>
+                                                                            rowIndex !==
+                                                                            index,
+                                                                    ),
+                                                                )
+                                                            }
+                                                        />
+                                                    ),
+                                                )
                                             )}
-                                        />
-                                    )}
-                                    <InputErrorText
-                                        error={form.errors.procedures}
-                                    />
-                                    <div className="grid gap-2">
-                                        {form.data.procedures.length === 0 ? (
-                                            <EmptyText text="Belum ada tindakan." />
-                                        ) : (
-                                            form.data.procedures.map(
-                                                (procedure, index) => (
-                                                    <div
-                                                        key={`${procedure.service_id}-${index}`}
-                                                        className="bg-muted/20 flex items-center justify-between gap-3 rounded-lg border p-3"
-                                                    >
-                                                        <div>
-                                                            <p className="text-sm font-medium">
-                                                                {procedure.name}
-                                                            </p>
-                                                            <p className="text-muted-foreground mt-1 text-xs">
-                                                                {procedure.code}{' '}
-                                                                ·{' '}
-                                                                {rupiah(
-                                                                    procedure.price,
-                                                                )}
-                                                            </p>
-                                                        </div>
-                                                        {!locked &&
-                                                            can.save && (
-                                                                <RemoveButton
-                                                                    label={`Hapus ${procedure.name}`}
-                                                                    onClick={() =>
-                                                                        form.setData(
-                                                                            'procedures',
-                                                                            form.data.procedures.filter(
-                                                                                (
-                                                                                    _,
-                                                                                    rowIndex,
-                                                                                ) =>
-                                                                                    rowIndex !==
-                                                                                    index,
-                                                                            ),
-                                                                        )
-                                                                    }
-                                                                />
-                                                            )}
-                                                    </div>
-                                                ),
-                                            )
-                                        )}
-                                    </div>
-                                </Section>
-                                <Section
-                                    number="4"
-                                    title="Resep"
-                                    description="Pilih obat dan tulis aturan pakai yang mudah dipahami pasien."
-                                    icon={<Pill className="size-4" />}
-                                >
-                                    {!locked && can.save && (
-                                        <ClinicalCatalogPicker<MedicineOption>
-                                            resource="medicines"
-                                            placeholder="Cari nama atau kode obat..."
-                                            render={(item) =>
-                                                `${item.name}${item.strength ? ` ${item.strength}` : ''} · ${item.dosage_form}`
-                                            }
-                                            onSelect={(item) =>
+                                        </div>
+                                        <TextAreaField
+                                            id="prescription_notes"
+                                            label="Catatan resep"
+                                            value={form.data.prescription_notes}
+                                            onChange={(value) =>
                                                 form.setData(
-                                                    'prescription_items',
-                                                    [
-                                                        ...form.data
-                                                            .prescription_items,
-                                                        {
-                                                            medicine_id:
-                                                                item.uuid,
-                                                            name: item.name,
-                                                            strength:
-                                                                item.strength,
-                                                            dosage_form:
-                                                                item.dosage_form,
-                                                            quantity: 1,
-                                                            unit: item.unit,
-                                                            dose_text: '',
-                                                            frequency_text: '',
-                                                            timing_text: '',
-                                                            duration_text: '',
-                                                            instruction: '',
-                                                            notes: null,
-                                                        },
-                                                    ],
+                                                    'prescription_notes',
+                                                    value,
                                                 )
                                             }
-                                            exclude={form.data.prescription_items.map(
-                                                (item) => item.medicine_id,
-                                            )}
+                                            disabled={!can.save || locked}
+                                            error={
+                                                form.errors.prescription_notes
+                                            }
+                                            rows={2}
+                                            placeholder="Catatan untuk petugas farmasi (opsional)"
+                                        />
+                                    </Section>
+                                </div>
+                            )}
+                            {section === 'additional' && (
+                                <div className="space-y-5">
+                                    <Section title="Catatan tambahan">
+                                        <TextAreaField
+                                            id="additional_notes"
+                                            label="Catatan"
+                                            value={form.data.additional_notes}
+                                            onChange={(value) =>
+                                                form.setData(
+                                                    'additional_notes',
+                                                    value,
+                                                )
+                                            }
+                                            disabled={!can.save || locked}
+                                            error={form.errors.additional_notes}
+                                            rows={3}
+                                        />
+                                    </Section>
+                                    {record && (
+                                        <MedicalRecordFiles
+                                            recordId={record.uuid}
+                                            files={files}
+                                            canUpload={can.save || can.amend}
                                         />
                                     )}
-                                    <InputErrorText
-                                        error={form.errors.prescription_items}
-                                    />
-                                    <div className="grid gap-3">
-                                        {form.data.prescription_items.length ===
-                                        0 ? (
-                                            <EmptyText text="Belum ada obat dalam resep." />
-                                        ) : (
-                                            form.data.prescription_items.map(
-                                                (item, index) => (
-                                                    <PrescriptionItemEditor
-                                                        key={`${item.medicine_id}-${index}`}
-                                                        item={item}
-                                                        index={index}
-                                                        disabled={
-                                                            !can.save || locked
-                                                        }
-                                                        errors={form.errors}
-                                                        onChange={(changes) => {
-                                                            const next = [
-                                                                ...form.data
-                                                                    .prescription_items,
-                                                            ];
-                                                            next[index] = {
-                                                                ...next[index],
-                                                                ...changes,
-                                                            };
-                                                            form.setData(
-                                                                'prescription_items',
-                                                                next,
-                                                            );
-                                                        }}
-                                                        onRemove={() =>
-                                                            form.setData(
-                                                                'prescription_items',
-                                                                form.data.prescription_items.filter(
-                                                                    (
-                                                                        _,
-                                                                        rowIndex,
-                                                                    ) =>
-                                                                        rowIndex !==
-                                                                        index,
-                                                                ),
-                                                            )
-                                                        }
-                                                    />
-                                                ),
-                                            )
-                                        )}
-                                    </div>
-                                    <TextAreaField
-                                        id="prescription_notes"
-                                        label="Catatan resep"
-                                        value={form.data.prescription_notes}
-                                        onChange={(value) =>
-                                            form.setData(
-                                                'prescription_notes',
-                                                value,
-                                            )
-                                        }
-                                        disabled={!can.save || locked}
-                                        error={form.errors.prescription_notes}
-                                        rows={2}
-                                        placeholder="Catatan untuk petugas farmasi (opsional)"
-                                    />
-                                </Section>
-                            </div>}
-                            {section === 'additional' && <div
-                                className="space-y-5"
-                            >
-                                <Section
-                                    number="5"
-                                    title="Catatan Tambahan"
-                                    description="Informasi klinis lain yang belum tercakup pada bagian di atas."
-                                >
-                                    <TextAreaField
-                                        id="additional_notes"
-                                        label="Catatan"
-                                        value={form.data.additional_notes}
-                                        onChange={(value) =>
-                                            form.setData(
-                                                'additional_notes',
-                                                value,
-                                            )
-                                        }
-                                        disabled={!can.save || locked}
-                                        error={form.errors.additional_notes}
-                                        rows={3}
-                                    />
-                                </Section>
-                                {record && (
-                                    <MedicalRecordFiles
-                                        recordId={record.uuid}
-                                        files={files}
-                                        canUpload={can.save || can.amend}
-                                    />
-                                )}
-                                {!record && can.save && <EmptyText text="Simpan draft terlebih dahulu untuk menambahkan lampiran." />}
-                                {record && locked && (
-                                    <AmendmentSection
-                                        record={record}
-                                        canAmend={can.amend}
-                                    />
-                                )}
-                            </div>}
+                                    {!record && can.save && (
+                                        <EmptyText text="Simpan draft terlebih dahulu untuk menambahkan lampiran." />
+                                    )}
+                                    {record && locked && (
+                                        <AmendmentSection
+                                            record={record}
+                                            canAmend={can.amend}
+                                        />
+                                    )}
+                                </div>
+                            )}
                         </fieldset>
                     </main>
                     <div className="hidden space-y-4 xl:sticky xl:top-4 xl:block">
-                    <TriageSection encounter={encounter} />
-                    <ContextPanel
-                        encounter={encounter}
-                        previousEncounters={previousEncounters}
-                        canViewPatient={can.view_patient}
-                    />
+                        <TriageSection encounter={encounter} />
+                        <ContextPanel
+                            encounter={encounter}
+                            previousEncounters={previousEncounters}
+                            canViewPatient={can.view_patient}
+                        />
                     </div>
                 </div>
                 {can.save && !locked && (
                     <div className="bg-background/95 sticky bottom-0 z-30 mt-auto border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:px-6">
                         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-                            <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                                <span className={cn('flex items-center gap-1.5 font-medium', ready ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}>
-                                    {ready ? <CheckCircle2 className="size-3.5" /> : <ClipboardPlus className="size-3.5" />}
-                                    {ready ? 'Siap diselesaikan' : `Lengkapi ${incomplete.length} bagian:`}
-                                </span>
-                                {incomplete.map((item) => <button key={item.field} type="button" onClick={() => focusField(item.field)} className="text-primary rounded py-1 underline underline-offset-4 focus-visible:ring-2 focus-visible:outline-none">{item.label}</button>)}
-                            </div>
                             <p
                                 className="text-muted-foreground flex w-full items-center gap-2 text-xs sm:w-auto"
                                 role="status"
@@ -861,7 +900,7 @@ function MedicalRecordWorkspace({
                                         {formatDateTime(record.updated_at)}
                                     </>
                                 ) : (
-                                    'Belum ada draft tersimpan'
+                                    'Draft baru'
                                 )}
                             </p>
                             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
@@ -886,10 +925,21 @@ function MedicalRecordWorkspace({
                                                 form.processing || !can.finalize
                                             }
                                         >
-                                            <CheckCircle2 /> Selesaikan pemeriksaan
+                                            <CheckCircle2 /> Selesaikan
                                         </Button>
                                     </AlertDialogTrigger>
-                                    <AlertDialogContent>
+                                    <AlertDialogContent
+                                        onCloseAutoFocus={(event) => {
+                                            const field =
+                                                pendingFocusField.current;
+                                            if (field) {
+                                                event.preventDefault();
+                                                pendingFocusField.current =
+                                                    null;
+                                                focusField(field);
+                                            }
+                                        }}
+                                    >
                                         <AlertDialogHeader>
                                             <span className="bg-primary/10 text-primary mb-2 grid size-11 place-items-center rounded-xl">
                                                 <LockKeyhole className="size-5" />
@@ -906,39 +956,32 @@ function MedicalRecordWorkspace({
                                                 koreksi rekam medis.
                                             </AlertDialogDescription>
                                         </AlertDialogHeader>
-                                        <div className="bg-muted/20 grid gap-2 rounded-lg border p-4">
-                                            {requirements.map((item) => (
-                                                <div
-                                                    key={item.field}
-                                                    className="flex items-center gap-2 text-sm"
-                                                >
-                                                    {item.done ? (
-                                                        <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
-                                                    ) : (
+                                        {incomplete.length > 0 && (
+                                            <div className="bg-muted/20 grid gap-2 rounded-lg border p-4">
+                                                {incomplete.map((item) => (
+                                                    <div
+                                                        key={item.field}
+                                                        className="flex items-center gap-2 text-sm"
+                                                    >
                                                         <AlertTriangle className="size-4 shrink-0 text-amber-600" />
-                                                    )}
-                                                    <span className="flex-1">
-                                                        {item.label}
-                                                    </span>
-                                                    {!item.done && (
+                                                        <span className="flex-1">
+                                                            {item.label}
+                                                        </span>
                                                         <Button
                                                             size="sm"
                                                             variant="ghost"
-                                                            onClick={() => {
-                                                                setConfirmFinalization(
-                                                                    false,
-                                                                );
+                                                            onClick={() =>
                                                                 focusField(
                                                                     item.field,
-                                                                );
-                                                            }}
+                                                                )
+                                                            }
                                                         >
                                                             Lengkapi
                                                         </Button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                         <p className="text-muted-foreground text-sm">
                                             {form.data.diagnoses.length}{' '}
                                             diagnosis /{' '}
@@ -1039,7 +1082,7 @@ function PatientHeader({
                                           : 'queue',
                                 },
                             })}
-                            aria-label="Kembali ke antrean dokter"
+                            aria-label="Kembali ke rekam medis"
                         >
                             <ArrowLeft />
                         </Link>
@@ -1077,10 +1120,10 @@ function PatientHeader({
                         </span>
                     ) : (
                         <span className="text-muted-foreground rounded-lg border px-3 py-1.5">
-                            Belum ada alergi aktif tercatat
+                            Belum ada alergi tercatat
                         </span>
                     )}
-                    <span className="rounded-lg border px-3 py-1.5">
+                    <span className="text-muted-foreground px-1 py-1.5">
                         {encounter.practitioner.name}
                     </span>
                 </div>
@@ -1113,7 +1156,7 @@ function TriageSection({ encounter }: { encounter: ClinicalEncounter }) {
               [
                   'BB / TB',
                   triage.weight || triage.height
-                      ? `${triage.weight ?? '-'} kg / ${triage.height ?? '-'} cm`
+                      ? `${triage.weight ? Number(triage.weight) : '-'} kg / ${triage.height ? Number(triage.height) : '-'} cm`
                       : null,
               ],
               [
@@ -1125,32 +1168,29 @@ function TriageSection({ encounter }: { encounter: ClinicalEncounter }) {
     return (
         <section className="bg-card rounded-xl border">
             <div className="border-b p-4">
-                <h2 className="font-semibold">Pemeriksaan Awal</h2>
+                <h2 className="text-sm font-semibold">Pemeriksaan awal</h2>
             </div>
             <div className="p-4">
                 {!triage ? (
                     <p className="text-muted-foreground text-sm">
-                        Triase tidak digunakan atau belum tersedia.
+                        Data triase belum tersedia.
                     </p>
                 ) : (
                     <div className="grid gap-4">
-                        <div className="grid grid-cols-2 gap-2">
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-4">
                             {vitals
                                 .filter(([, value]) => value)
                                 .map(([label, value]) => (
-                                    <div
-                                        key={label}
-                                        className="bg-muted/30 rounded-lg border p-3"
-                                    >
-                                        <p className="text-muted-foreground text-xs">
+                                    <div key={label}>
+                                        <dt className="text-muted-foreground text-xs">
                                             {label}
-                                        </p>
-                                        <p className="mt-1 text-sm font-semibold">
+                                        </dt>
+                                        <dd className="mt-1 text-sm font-medium">
                                             {value}
-                                        </p>
+                                        </dd>
                                     </div>
                                 ))}
-                        </div>
+                        </dl>
                         {(triage.chief_complaint || triage.notes) && (
                             <p className="text-sm">
                                 {triage.chief_complaint}
@@ -1168,42 +1208,30 @@ function TriageSection({ encounter }: { encounter: ClinicalEncounter }) {
     );
 }
 function Section({
-    number,
+    id,
     title,
     description,
-    icon,
+    action,
     children,
 }: {
-    number: string;
+    id?: string;
     title: string;
-    description: string;
-    icon?: ReactNode;
+    description?: string;
+    action?: ReactNode;
     children: ReactNode;
 }) {
     return (
-        <section
-            id={
-                number === '2'
-                    ? 'diagnoses'
-                    : number === '3'
-                      ? 'procedures'
-                      : number === '4'
-                        ? 'prescription_items'
-                        : undefined
-            }
-            tabIndex={-1}
-            className="bg-card rounded-xl border"
-        >
-            <div className="flex gap-3 border-b p-4 md:p-5">
-                <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-lg text-xs font-semibold">
-                    {icon ?? number}
-                </span>
+        <section id={id} tabIndex={-1} className="bg-card rounded-xl border">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 md:px-5">
                 <div>
-                    <h2 className="font-semibold">{title}</h2>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                        {description}
-                    </p>
+                    <h2 className="text-sm font-semibold">{title}</h2>
+                    {description && (
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            {description}
+                        </p>
+                    )}
                 </div>
+                {action}
             </div>
             <div className="grid gap-4 p-4 md:p-5">{children}</div>
         </section>
@@ -1217,7 +1245,7 @@ function TextAreaField({
     error,
     disabled,
     placeholder,
-    rows = 5,
+    rows = 4,
     required = false,
     maxLength = 20000,
 }: {
@@ -1250,7 +1278,12 @@ function TextAreaField({
     );
 }
 function PrescriptionItemEditor({
-    item, index, disabled, errors, onChange, onRemove,
+    item,
+    index,
+    disabled,
+    errors,
+    onChange,
+    onRemove,
 }: {
     item: PrescriptionRow;
     index: number;
@@ -1261,45 +1294,115 @@ function PrescriptionItemEditor({
 }) {
     const fields = [
         { key: 'dose_text', label: 'Dosis', placeholder: 'Contoh: 1 tablet' },
-        { key: 'frequency_text', label: 'Frekuensi', placeholder: 'Contoh: 3 kali sehari' },
-        { key: 'timing_text', label: 'Waktu pemberian', placeholder: 'Contoh: sesudah makan' },
-        { key: 'duration_text', label: 'Lama pemberian', placeholder: 'Contoh: 5 hari' },
+        {
+            key: 'frequency_text',
+            label: 'Frekuensi',
+            placeholder: 'Contoh: 3 kali sehari',
+        },
+        {
+            key: 'timing_text',
+            label: 'Waktu pemberian',
+            placeholder: 'Contoh: sesudah makan',
+        },
+        {
+            key: 'duration_text',
+            label: 'Lama pemberian',
+            placeholder: 'Contoh: 5 hari',
+        },
     ] as const;
     const quantityId = `prescription_items.${index}.quantity`;
     const instructionId = `prescription_items.${index}.instruction`;
-    const showDetails = fields.some(({ key }) => item[key] || errors[`prescription_items.${index}.${key}`]);
+    const showDetails = fields.some(
+        ({ key }) => item[key] || errors[`prescription_items.${index}.${key}`],
+    );
     return (
         <div className="bg-muted/20 grid gap-4 rounded-lg border p-4">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold break-words">{item.name} {item.strength}</p>
-                    <p className="text-muted-foreground mt-1 text-xs">{item.dosage_form} ? satuan {item.unit}</p>
+                    <p className="text-sm font-semibold break-words">
+                        {item.name} {item.strength}
+                    </p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        {item.dosage_form} · {item.unit}
+                    </p>
                 </div>
-                {!disabled && <RemoveButton label={`Hapus ${item.name}`} onClick={onRemove} />}
+                {!disabled && (
+                    <RemoveButton
+                        label={`Hapus ${item.name}`}
+                        onClick={onRemove}
+                    />
+                )}
             </div>
             <div className="grid items-start gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
-                <FormField id={quantityId} label={`Jumlah (${item.unit})`} error={errors[quantityId]} required>
-                    <Input id={quantityId} type="number" inputMode="decimal" min="0.01" max="999999" step="0.01"
-                        value={item.quantity} disabled={disabled} aria-invalid={Boolean(errors[quantityId])}
-                        aria-describedby={errors[quantityId] ? `${quantityId}-error` : undefined}
-                        onChange={(event) => onChange({ quantity: event.target.value })} />
+                <FormField
+                    id={quantityId}
+                    label={`Jumlah (${item.unit})`}
+                    error={errors[quantityId]}
+                    required
+                >
+                    <Input
+                        id={quantityId}
+                        type="number"
+                        inputMode="decimal"
+                        min="0.01"
+                        max="999999"
+                        step="0.01"
+                        value={item.quantity}
+                        disabled={disabled}
+                        aria-invalid={Boolean(errors[quantityId])}
+                        aria-describedby={
+                            errors[quantityId]
+                                ? `${quantityId}-error`
+                                : undefined
+                        }
+                        onChange={(event) =>
+                            onChange({ quantity: event.target.value })
+                        }
+                    />
                 </FormField>
-                <TextAreaField id={instructionId} label="Aturan pakai untuk pasien" value={item.instruction}
-                    onChange={(value) => onChange({ instruction: value })} error={errors[instructionId]}
-                    disabled={disabled} required rows={2} maxLength={2000}
-                    placeholder="Tulis dosis, frekuensi, dan waktu pemakaian sesuai instruksi dokter" />
+                <TextAreaField
+                    id={instructionId}
+                    label="Aturan pakai"
+                    value={item.instruction}
+                    onChange={(value) => onChange({ instruction: value })}
+                    error={errors[instructionId]}
+                    disabled={disabled}
+                    required
+                    rows={2}
+                    maxLength={2000}
+                    placeholder="Dosis, frekuensi, dan waktu pemakaian"
+                />
             </div>
             <details open={showDetails || undefined} className="border-t pt-3">
-                <summary className="text-muted-foreground cursor-pointer rounded text-xs font-medium focus-visible:ring-2 focus-visible:outline-none">Rincian dosis (opsional)</summary>
-                <p className="text-muted-foreground mt-3 text-xs">Isi bila perlu dicatat terpisah. Pastikan sesuai dengan aturan pakai di atas.</p>
+                <summary className="text-muted-foreground cursor-pointer rounded text-xs font-medium focus-visible:ring-2 focus-visible:outline-none">
+                    Rincian dosis
+                </summary>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     {fields.map(({ key, label, placeholder }) => {
                         const id = `prescription_items.${index}.${key}`;
-                        return <FormField key={key} id={id} label={label} error={errors[id]}>
-                            <Input id={id} value={item[key] ?? ''} disabled={disabled} placeholder={placeholder} maxLength={100}
-                                aria-invalid={Boolean(errors[id])} aria-describedby={errors[id] ? `${id}-error` : undefined}
-                                onChange={(event) => onChange({ [key]: event.target.value })} />
-                        </FormField>;
+                        return (
+                            <FormField
+                                key={key}
+                                id={id}
+                                label={label}
+                                error={errors[id]}
+                            >
+                                <Input
+                                    id={id}
+                                    value={item[key] ?? ''}
+                                    disabled={disabled}
+                                    placeholder={placeholder}
+                                    maxLength={100}
+                                    aria-invalid={Boolean(errors[id])}
+                                    aria-describedby={
+                                        errors[id] ? `${id}-error` : undefined
+                                    }
+                                    onChange={(event) =>
+                                        onChange({ [key]: event.target.value })
+                                    }
+                                />
+                            </FormField>
+                        );
                     })}
                 </div>
             </details>
@@ -1320,12 +1423,11 @@ function ContextPanel({
     return (
         <aside className="grid min-w-0 gap-4">
             <section className="bg-card rounded-xl border p-4">
-                <h2 className="text-sm font-semibold">Kunjungan Saat Ini</h2>
+                <h2 className="text-sm font-semibold">Kunjungan</h2>
                 <dl className="mt-3 grid gap-3 text-xs">
                     <Info label="Nomor" value={encounter.registration_number} />
                     <Info label="Unit" value={encounter.service_unit} />
                     <Info label="Status" value={encounter.status_label} />
-                    <Info label="Keluhan" value={encounter.chief_complaint} />
                 </dl>
                 {canViewPatient && (
                     <Button
@@ -1335,7 +1437,7 @@ function ContextPanel({
                         className="mt-4 w-full"
                     >
                         <Link href={showPatient(encounter.patient.uuid)}>
-                            Buka Profil Pasien
+                            Profil pasien
                         </Link>
                     </Button>
                 )}
@@ -1442,9 +1544,8 @@ function AmendmentSection({
     const form = useForm({ reason: '', content: '' });
     return (
         <Section
-            number="+"
-            title="Koreksi Rekam Medis"
-            description="Koreksi ditambahkan sebagai catatan baru; isi rekam medis original tetap terkunci."
+            title="Koreksi rekam medis"
+            description="Koreksi dicatat tanpa mengubah rekam medis asli."
         >
             {record.amendments.map((item) => (
                 <article
@@ -1529,11 +1630,7 @@ function RemoveButton({
     );
 }
 function EmptyText({ text }: { text: string }) {
-    return (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-center text-xs">
-            {text}
-        </p>
-    );
+    return <p className="text-muted-foreground py-2 text-sm">{text}</p>;
 }
 function InputErrorText({ error }: { error?: string }) {
     return error ? (
@@ -1544,9 +1641,9 @@ function InputErrorText({ error }: { error?: string }) {
 }
 function Info({ label, value }: { label: string; value: string }) {
     return (
-        <div>
+        <div className="flex items-baseline justify-between gap-3">
             <dt className="text-muted-foreground">{label}</dt>
-            <dd className="mt-1 font-medium">{value}</dd>
+            <dd className="text-right font-medium break-words">{value}</dd>
         </div>
     );
 }

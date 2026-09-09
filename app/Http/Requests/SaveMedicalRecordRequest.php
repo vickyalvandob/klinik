@@ -105,19 +105,6 @@ class SaveMedicalRecordRequest extends FormRequest
     }
 
     /** @return array<string, string> */
-    public function messages(): array
-    {
-        return [
-            'subjective.required' => 'Lengkapi keluhan dan riwayat sebelum menyelesaikan pemeriksaan.',
-            'assessment.required' => 'Lengkapi penilaian klinis sebelum menyelesaikan pemeriksaan.',
-            'plan.required' => 'Lengkapi rencana perawatan sebelum menyelesaikan pemeriksaan.',
-            'prescription_items.*.quantity.required' => 'Isi jumlah obat yang diresepkan.',
-            'prescription_items.*.quantity.gt' => 'Jumlah obat harus lebih dari 0.',
-            'prescription_items.*.instruction.required' => 'Tuliskan aturan pakai untuk setiap obat.',
-        ];
-    }
-
-    /** @return array<string, string> */
     public function attributes(): array
     {
         return [

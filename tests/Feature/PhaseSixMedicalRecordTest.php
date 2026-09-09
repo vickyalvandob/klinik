@@ -15,6 +15,7 @@ use App\Models\QueueEntry;
 use App\Models\Role;
 use App\PrescriptionStatus;
 use App\SystemRole;
+use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -323,13 +324,55 @@ test('medical record search matches names and identifiers inside the assigned cl
         ->assertInertia(fn (Assert $page) => $page->has('encounters.data', 0)->where('summary.waiting', 1));
 });
 
+test('medical record dates default to today in the clinic timezone', function (string $mode, EncounterStatus $status, string $summaryKey, array $dates) {
+    $this->travelTo(Carbon::parse('2026-09-09 16:30:00', 'UTC'));
+    $context = clinicalEncounter($this);
+    $context['clinic']->forceFill(['timezone' => 'Asia/Jayapura'])->save();
+    $context['encounter']->forceFill(['encounter_date' => '2026-09-10', 'status' => $status])->save();
+    Encounter::factory()->count(2)->sequence(
+        ['encounter_date' => '2026-09-09'],
+        ['encounter_date' => '2026-09-11'],
+    )->create([
+        'tenant_id' => $context['tenant']->id,
+        'clinic_id' => $context['clinic']->id,
+        'patient_id' => $context['patient']->id,
+        'service_unit_id' => $context['serviceUnit']->id,
+        'practitioner_id' => $context['practitioner']->id,
+        'status' => $status,
+    ]);
+
+    $this->actingAs($context['user'])->get(route('doctor-queue.index', ['mode' => $mode, ...$dates]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('today', '2026-09-10')
+            ->where('filters.from', '2026-09-10')
+            ->where('filters.to', '2026-09-10')
+            ->where('encounters.total', 1)
+            ->where('encounters.data.0.uuid', $context['encounter']->uuid)
+            ->where('summary.'.$summaryKey, 1));
+})->with([
+    'waiting' => ['queue', EncounterStatus::WaitingDoctor, 'waiting'],
+    'active' => ['active', EncounterStatus::InConsultation, 'active'],
+    'history' => ['history', EncounterStatus::Completed, 'finished'],
+])->with([
+    'omitted dates' => [[]],
+    'empty dates' => [['from' => '', 'to' => '']],
+]);
+
 test('medical record date filters include the entire selected day and validate reversed dates', function () {
     $context = clinicalEncounter($this);
     $context['encounter']->forceFill(['encounter_date' => '2026-01-10'])->save();
     $this->actingAs($context['user'])->get(route('doctor-queue.index', ['from' => '2026-01-10', 'to' => '2026-01-10']))
-        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 1));
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->has('encounters.data', 1)
+        ->where('filters.from', '2026-01-10')
+        ->where('filters.to', '2026-01-10')
+        ->where('summary.waiting', 1));
     $this->get(route('doctor-queue.index', ['to' => '2026-01-09']))
-        ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 0));
+        ->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->has('encounters.data', 0)
+        ->where('filters.from', '')
+        ->where('summary.waiting', 0));
     $this->get(route('doctor-queue.index', ['from' => '2026-01-11', 'to' => '2026-01-10']))
         ->assertSessionHasErrors(['to' => 'Tanggal akhir harus sama atau setelah tanggal awal.']);
 });
@@ -345,7 +388,7 @@ test('medical record filters reject malformed input', function (array $filters, 
 
 test('medical history lists newest visits first and paginates filtered results', function () {
     $context = clinicalEncounter($this);
-    $context['encounter']->forceFill(['status' => EncounterStatus::Completed, 'registered_at' => '2026-01-01 08:00:00'])->save();
+    $context['encounter']->forceFill(['status' => EncounterStatus::Completed, 'encounter_date' => '2026-01-01', 'registered_at' => '2026-01-01 08:00:00'])->save();
     $newest = null;
     for ($index = 1; $index <= 15; $index++) {
         $visit = Encounter::factory()->create([
@@ -364,11 +407,12 @@ test('medical history lists newest visits first and paginates filtered results',
         ]);
         $newest = $visit;
     }
-    $this->actingAs($context['user'])->get(route('doctor-queue.index', ['mode' => 'history']))
+    $filters = ['mode' => 'history', 'from' => '2026-01-01', 'to' => '2026-01-02'];
+    $this->actingAs($context['user'])->get(route('doctor-queue.index', $filters))
         ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 15)
         ->where('encounters.total', 16)->where('encounters.data.0.uuid', $newest->uuid)
         ->reloadOnly(['encounters', 'mode', 'filters'], fn (Assert $reload) => $reload->missing('summary')->has('encounters.data', 15)));
-    $this->get(route('doctor-queue.index', ['mode' => 'history', 'page' => 2]))
+    $this->get(route('doctor-queue.index', [...$filters, 'page' => 2]))
         ->assertOk()->assertInertia(fn (Assert $page) => $page->has('encounters.data', 1)
         ->where('encounters.data.0.uuid', $context['encounter']->uuid));
 });
@@ -397,7 +441,6 @@ test('previous clinical history is loaded and audited only when requested', func
             ->where('previousEncounters.0.assessment', 'Riwayat penilaian klinis')));
     expect(MedicalRecordAccessLog::withoutGlobalScopes()->where('action', 'history_view')->count())->toBe(1);
 });
-
 
 test('finalization explains missing clinical fields without saving an incomplete record', function () {
     $context = startedClinicalEncounter($this);

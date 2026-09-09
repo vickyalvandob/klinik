@@ -29,6 +29,7 @@ class DoctorQueueController extends Controller
         $clinic = $this->currentClinic->get();
         $practitioner = $this->currentPractitioner->find();
         $seesAllPractitioners = $this->currentClinic->membership()->role->code === SystemRole::OwnerAdmin->value;
+        $today = now($clinic->timezone)->toDateString();
         $tomorrow = now($clinic->timezone)->addDay()->toDateString();
         $mode = match ($request->string('mode')->toString()) {
             'active' => 'active',
@@ -37,18 +38,19 @@ class DoctorQueueController extends Controller
         };
 
         $search = trim($request->string('search')->toString());
-        $from = $request->string('from')->toString();
-        $to = $request->string('to')->toString();
+        $hasDateFilter = $request->filled('from') || $request->filled('to');
+        $from = $hasDateFilter ? $request->string('from')->toString() : $today;
+        $to = $hasDateFilter ? $request->string('to')->toString() : $today;
         $baseQuery = fn (): Builder => Encounter::query()
             ->where('clinic_id', $clinic->id)
+            ->when($from !== '', fn (Builder $query) => $query->where('encounter_date', '>=', $from))
+            ->when($to !== '', fn (Builder $query) => $query->where('encounter_date', '<', Carbon::parse($to)->addDay()->toDateString()))
             ->when(! $seesAllPractitioners, fn (Builder $query) => $practitioner === null
                 ? $query->whereRaw('1 = 0')
                 : $query->where('practitioner_id', $practitioner->id));
 
         $encounters = fn (): array => $baseQuery()
             ->when($mode !== 'history', fn (Builder $query) => $query->where('encounter_date', '<', $tomorrow))
-            ->when($from !== '', fn (Builder $query) => $query->where('encounter_date', '>=', $from))
-            ->when($to !== '', fn (Builder $query) => $query->where('encounter_date', '<', Carbon::parse($to)->addDay()->toDateString()))
             ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $query) use ($search): void {
                 $query->where('registration_number', 'like', "%{$search}%")
                     ->orWhereHas('patient', fn (Builder $patient) => $patient
@@ -107,6 +109,7 @@ class DoctorQueueController extends Controller
             'encounters' => $encounters,
             'mode' => $mode,
             'filters' => ['search' => $search, 'from' => $from, 'to' => $to],
+            'today' => $today,
             'scope' => $seesAllPractitioners ? 'clinic' : 'practitioner',
             'practitioner' => $practitioner === null ? null : [
                 'uuid' => $practitioner->uuid,
