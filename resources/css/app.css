@@ -163,6 +163,18 @@
     .print-document {
         overflow-wrap: anywhere;
     }
+    body:has(.print-document) [data-slot='sidebar'],
+    body:has(.print-document) [data-slot='sidebar-inset'] > header {
+        display: none !important;
+    }
+    body:has(.print-document) [data-slot='sidebar-wrapper'],
+    body:has(.print-document) [data-slot='sidebar-inset'] {
+        display: block;
+        min-height: 0;
+        margin: 0;
+        overflow: visible;
+        background: white;
+    }
     .print-document header,
     .print-document footer,
     .print-document dl > div {

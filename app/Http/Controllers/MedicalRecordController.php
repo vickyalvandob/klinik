@@ -50,7 +50,7 @@ class MedicalRecordController extends Controller
             ->orderByDesc('encounter_date')
             ->orderByDesc('id')
             ->limit(5)
-            ->get()
+            ->get(['id', 'uuid', 'clinic_id', 'patient_id', 'practitioner_id', 'encounter_date'])
             ->each(fn (Encounter $previous) => $accessRecorder->record($previous, $request, 'history_view'))
             ->map(fn (Encounter $previous): array => [
                 'uuid' => $previous->uuid,
@@ -69,9 +69,9 @@ class MedicalRecordController extends Controller
         return Inertia::render('medical-records/edit', [
             'encounter' => fn (): array => $this->encounterData($encounter),
             'previousEncounters' => Inertia::optional($previousEncounters),
-            'files' => fn () => $encounter->medicalRecord === null ? [] : MedicalRecordFile::query()
+            'files' => Inertia::optional(fn () => $encounter->medicalRecord === null ? [] : MedicalRecordFile::query()
                 ->where('clinic_id', $encounter->clinic_id)->where('medical_record_id', $encounter->medicalRecord->id)
-                ->latest('id')->get(['uuid', 'original_name', 'size', 'created_at']),
+                ->latest('id')->get(['uuid', 'original_name', 'size', 'created_at'])),
             'can' => fn (): array => [
                 'view_patient' => Gate::allows('view', $encounter->patient),
                 'start' => Gate::allows('start', [MedicalRecord::class, $encounter]),
@@ -122,9 +122,9 @@ class MedicalRecordController extends Controller
             'practitioner.staffProfile:id,name',
             'queueEntry:id,encounter_id,queue_number',
             'triage',
-            'medicalRecord.diagnoses.catalog',
-            'medicalRecord.procedures.service',
-            'medicalRecord.prescription.items.medicine',
+            'medicalRecord.diagnoses.catalog:id,uuid',
+            'medicalRecord.procedures.service:id,uuid',
+            'medicalRecord.prescription.items.medicine:id,uuid',
             'medicalRecord.amendments' => fn ($query) => $query->with('creator:id,name')->oldest(),
         ]);
 

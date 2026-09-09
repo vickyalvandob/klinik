@@ -28,7 +28,6 @@ class BillingIndexRequest extends FormRequest
         return [
             'mode' => ['nullable', Rule::in(['outstanding', 'partial', 'paid', 'voided'])],
             'search' => ['nullable', 'string', 'max:100'],
-            'date' => ['nullable', 'date_format:Y-m-d'],
             'page' => ['nullable', 'integer', 'min:1'],
         ];
     }
@@ -40,7 +39,6 @@ class BillingIndexRequest extends FormRequest
             'mode.in' => 'Status tagihan tidak valid.',
             'search.string' => 'Masukkan kata pencarian yang valid.',
             'search.max' => 'Pencarian maksimal 100 karakter.',
-            'date.date_format' => 'Tanggal penerimaan tidak valid.',
             'page.integer' => 'Halaman tidak valid.',
             'page.min' => 'Halaman minimal 1.',
         ];

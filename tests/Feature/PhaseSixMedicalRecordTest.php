@@ -120,6 +120,17 @@ test('doctor saves an audited draft with server-authoritative clinical snapshots
         ->and($prescription->items()->sole()->medicine_name_snapshot)->toBe('Paracetamol')
         ->and(MedicalRecordAudit::withoutGlobalScopes()->sole()->action)->toBe('draft_saved')
         ->and($context['encounter']->refresh()->status)->toBe(EncounterStatus::InConsultation);
+
+    $this->get(route('medical-records.edit', $context['encounter']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('encounter.medical_record.diagnoses.0.catalog_id', $diagnosis->uuid)
+            ->where('encounter.medical_record.diagnoses.0.display', 'Common cold')
+            ->where('encounter.medical_record.procedures.0.service_id', $service->uuid)
+            ->where('encounter.medical_record.procedures.0.name', 'Perawatan luka')
+            ->where('encounter.medical_record.prescription.items.0.medicine_id', $medicine->uuid)
+            ->where('encounter.medical_record.prescription.items.0.name', 'Paracetamol')
+            ->missing('files')
+            ->missing('previousEncounters'));
 });
 
 test('finalization requires complete soap and exactly one primary diagnosis even with legacy options disabled', function () {
@@ -385,4 +396,37 @@ test('previous clinical history is loaded and audited only when requested', func
             ->has('previousEncounters', 1)->where('previousEncounters.0.uuid', $previous->uuid)
             ->where('previousEncounters.0.assessment', 'Riwayat penilaian klinis')));
     expect(MedicalRecordAccessLog::withoutGlobalScopes()->where('action', 'history_view')->count())->toBe(1);
+});
+
+
+test('finalization explains missing clinical fields without saving an incomplete record', function () {
+    $context = startedClinicalEncounter($this);
+
+    $this->put(route('medical-records.update', $context['encounter']), ['intent' => 'finalize'])
+        ->assertSessionHasErrors([
+            'subjective' => 'Lengkapi keluhan dan riwayat sebelum menyelesaikan pemeriksaan.',
+            'assessment' => 'Lengkapi penilaian klinis sebelum menyelesaikan pemeriksaan.',
+            'plan' => 'Lengkapi rencana perawatan sebelum menyelesaikan pemeriksaan.',
+            'diagnoses' => 'Pilih satu diagnosis utama sebelum finalisasi.',
+        ]);
+
+    expect(MedicalRecord::withoutGlobalScopes()->count())->toBe(0);
+    expect($context['encounter']->refresh()->status)->toBe(EncounterStatus::InConsultation);
+});
+
+test('prescription errors identify the quantity and patient instruction that need attention', function () {
+    $context = startedClinicalEncounter($this);
+    $medicine = Medicine::factory()->create([
+        'tenant_id' => $context['tenant']->id, 'clinic_id' => $context['clinic']->id,
+    ]);
+
+    $this->put(route('medical-records.update', $context['encounter']), [
+        'intent' => 'draft',
+        'prescription_items' => [['medicine_id' => $medicine->uuid, 'quantity' => 0, 'instruction' => '']],
+    ])->assertSessionHasErrors([
+        'prescription_items.0.quantity' => 'Jumlah obat harus lebih dari 0.',
+        'prescription_items.0.instruction' => 'Tuliskan aturan pakai untuk setiap obat.',
+    ]);
+
+    expect(Prescription::withoutGlobalScopes()->count())->toBe(0);
 });

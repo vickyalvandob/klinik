@@ -29,13 +29,13 @@ class ReportRequest extends FormRequest
         return [
             'from' => ['required', 'date_format:Y-m-d'],
             'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'section' => ['sometimes', Rule::in(['visits', 'revenue', 'services', 'diagnoses', 'doctors', 'pharmacy'])],
+            'section' => ['sometimes', Rule::in(['visits', 'revenue', 'billing', 'services', 'diagnoses', 'doctors', 'pharmacy'])],
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        $today = now(app(CurrentClinic::class)->get()->timezone);
+        $today = CarbonImmutable::now(app(CurrentClinic::class)->get()->timezone);
         $this->merge([
             'from' => $this->input('from', $today->startOfMonth()->toDateString()),
             'to' => $this->input('to', $today->toDateString()),
@@ -58,6 +58,8 @@ class ReportRequest extends FormRequest
     public function messages(): array
     {
         return ['from.date_format' => 'Tanggal awal tidak valid.', 'to.date_format' => 'Tanggal akhir tidak valid.',
-            'to.after_or_equal' => 'Tanggal akhir harus sama atau setelah tanggal awal.'];
+            'to.after_or_equal' => 'Tanggal akhir harus sama atau setelah tanggal awal.',
+            'from.required' => 'Tanggal awal wajib diisi.', 'to.required' => 'Tanggal akhir wajib diisi.',
+            'section.in' => 'Jenis laporan tidak valid.'];
     }
 }

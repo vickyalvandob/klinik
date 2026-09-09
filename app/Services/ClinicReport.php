@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\EncounterStatus;
+use App\InvoiceStatus;
 use App\Models\Diagnosis;
 use App\Models\Encounter;
 use App\Models\EncounterProcedure;
@@ -27,6 +28,7 @@ class ClinicReport
         return array_keys(array_filter([
             'visits' => $user->hasClinicPermission('encounter.view'),
             'revenue' => $user->hasClinicPermission('billing.view'),
+            'billing' => $user->hasClinicPermission('billing.view'),
             'services' => $user->hasClinicPermission('billing.view') || $user->hasClinicPermission('medical_record.view'),
             'diagnoses' => $user->hasClinicPermission('medical_record.view'),
             'doctors' => $user->hasClinicPermission('encounter.view'),
@@ -46,17 +48,23 @@ class ClinicReport
             $summary['cancelled'] = (int) $counts->get('cancelled', 0);
         }
         if ($user->hasClinicPermission('billing.view')) {
-            $summary['revenue'] = (int) $this->payments($from, $to)->where('status', PaymentStatus::Received->value)->sum('amount');
-            $summary['voided_payments'] = (int) $this->payments($from, $to)->where('status', PaymentStatus::Voided->value)->sum('amount');
-            $summary['outstanding'] = (int) Invoice::query()->where('clinic_id', $this->currentClinic->id())
-                ->whereIn('encounter_id', $this->encounters($from, $to)->select('id'))
-                ->whereIn('status', ['issued', 'partially_paid'])->sum('balance_due');
+            $payments = $this->payments($from, $to)->toBase()
+                ->selectRaw('status, COUNT(*) as count, SUM(amount) as amount')->groupBy('status')->get()->keyBy('status');
+            $summary['revenue'] = (int) ($payments->get(PaymentStatus::Received->value)->amount ?? 0);
+            $summary['payment_count'] = (int) ($payments->get(PaymentStatus::Received->value)->count ?? 0);
+            $summary['voided_payments'] = (int) ($payments->get(PaymentStatus::Voided->value)->amount ?? 0);
+            $summary['voided_count'] = (int) ($payments->get(PaymentStatus::Voided->value)->count ?? 0);
+            $invoices = $this->invoices($from, $to)->where('status', '!=', InvoiceStatus::Voided->value)->toBase()
+                ->selectRaw('COUNT(*) as count, SUM(total_amount) as amount, SUM(balance_due) as balance')->first();
+            $summary['invoiced'] = (int) ($invoices->amount ?? 0);
+            $summary['invoice_count'] = (int) ($invoices->count ?? 0);
+            $summary['outstanding'] = (int) ($invoices->balance ?? 0);
         }
 
         return $summary;
     }
 
-    /** @return list<array{label: string, count: int, amount: int|null}> */
+    /** @return list<array{label: string, count: int, amount: int|null, balance?: int}> */
     public function rows(string $section, string $from, string $to): array
     {
         $clinicId = $this->currentClinic->id();
@@ -69,6 +77,9 @@ class ClinicReport
             'revenue' => $this->payments($from, $to)->where('status', PaymentStatus::Received->value)
                 ->selectRaw('method as label, COUNT(*) as total, SUM(amount) as amount')
                 ->groupBy('method')->orderBy('method')->get()->toBase(),
+            'billing' => $this->invoices($from, $to)
+                ->selectRaw('status as label, COUNT(*) as total, SUM(total_amount) as amount, SUM(balance_due) as balance')
+                ->groupBy('status')->orderBy('status')->get()->toBase(),
             'services' => EncounterProcedure::query()->where('clinic_id', $clinicId)
                 ->whereIn('encounter_id', $encounters->select('id'))->whereHas('medicalRecord', $finalRecords)
                 ->selectRaw('name_snapshot as label, COUNT(*) as total, SUM(price_snapshot) as amount')
@@ -92,13 +103,15 @@ class ClinicReport
                 'doctors' => $row->practitioner->staffProfile->name ?? 'Dokter tidak tersedia',
                 'visits' => CarbonImmutable::parse((string) $row->getAttribute('label'))->toDateString(),
                 'revenue' => PaymentMethod::from((string) $row->getAttribute('label'))->label(),
+                'billing' => InvoiceStatus::from((string) $row->getAttribute('label'))->label(),
                 'diagnoses' => $row->getAttribute('code').' - '.$row->getAttribute('label'),
                 'pharmacy' => PrescriptionStatus::from((string) $row->getAttribute('label'))->label(),
                 default => (string) $row->getAttribute('label'),
             };
 
             $result[] = ['label' => is_string($label) ? $label : 'Tidak tersedia', 'count' => (int) $row->getAttribute('total'),
-                'amount' => $row->getAttribute('amount') === null ? null : (int) $row->getAttribute('amount')];
+                'amount' => $row->getAttribute('amount') === null ? null : (int) $row->getAttribute('amount'),
+                ...($section === 'billing' ? ['balance' => (int) $row->getAttribute('balance')] : [])];
         }
 
         return $result;
@@ -118,7 +131,17 @@ class ClinicReport
         $timezone = $this->currentClinic->get()->timezone;
 
         return Payment::query()->where('clinic_id', $this->currentClinic->id())
-            ->where('received_at', '>=', CarbonImmutable::parse($from, $timezone)->startOfDay()->utc())
-            ->where('received_at', '<', CarbonImmutable::parse($to, $timezone)->addDay()->startOfDay()->utc());
+            ->where('received_at', '>=', CarbonImmutable::parse($from, $timezone)->startOfDay()->setTimezone(config('app.timezone')))
+            ->where('received_at', '<', CarbonImmutable::parse($to, $timezone)->addDay()->startOfDay()->setTimezone(config('app.timezone')));
+    }
+
+    /** @return Builder<Invoice> */
+    private function invoices(string $from, string $to): Builder
+    {
+        $timezone = $this->currentClinic->get()->timezone;
+
+        return Invoice::query()->where('clinic_id', $this->currentClinic->id())
+            ->where('issued_at', '>=', CarbonImmutable::parse($from, $timezone)->startOfDay()->setTimezone(config('app.timezone')))
+            ->where('issued_at', '<', CarbonImmutable::parse($to, $timezone)->addDay()->startOfDay()->setTimezone(config('app.timezone')));
     }
 }

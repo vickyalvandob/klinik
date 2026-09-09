@@ -9,9 +9,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
 use App\PaymentMethod;
-use App\PaymentStatus;
 use App\Support\Tenancy\CurrentClinic;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -33,9 +31,6 @@ class BillingController extends Controller
             default => 'outstanding',
         };
         $search = $request->string('search')->trim()->toString();
-        $reconciliationDate = $request->filled('date')
-            ? $request->string('date')->toString()
-            : now($this->currentClinic->get()->timezone)->toDateString();
         $statuses = match ($mode) {
             'partial' => [InvoiceStatus::PartiallyPaid->value],
             'paid' => [InvoiceStatus::Paid->value],
@@ -83,11 +78,8 @@ class BillingController extends Controller
         return Inertia::render('billing/index', [
             'mode' => $mode,
             'search' => $search,
-            'date' => $reconciliationDate,
-            'today' => now($this->currentClinic->get()->timezone)->toDateString(),
             'invoices' => $invoices,
             'summary' => fn (): array => $this->summary(),
-            'reconciliation' => fn (): array => $this->reconciliation($reconciliationDate),
         ]);
     }
 
@@ -189,71 +181,17 @@ class BillingController extends Controller
             ->toBase()->select('status')
             ->selectRaw('COUNT(*) as count, SUM(balance_due) as amount')
             ->groupBy('status')->get()->keyBy('status');
-        $issuedCount = (int) ($rows->get(InvoiceStatus::Issued->value)?->count ?? 0);
-        $partialCount = (int) ($rows->get(InvoiceStatus::PartiallyPaid->value)?->count ?? 0);
+        $issuedCount = (int) ($rows->get(InvoiceStatus::Issued->value)->count ?? 0);
+        $partialCount = (int) ($rows->get(InvoiceStatus::PartiallyPaid->value)->count ?? 0);
 
         return [
             'outstanding_count' => $issuedCount + $partialCount,
-            'outstanding_amount' => (int) ($rows->get(InvoiceStatus::Issued->value)?->amount ?? 0)
-                + (int) ($rows->get(InvoiceStatus::PartiallyPaid->value)?->amount ?? 0),
+            'outstanding_amount' => (int) ($rows->get(InvoiceStatus::Issued->value)->amount ?? 0)
+                + (int) ($rows->get(InvoiceStatus::PartiallyPaid->value)->amount ?? 0),
             'issued_count' => $issuedCount,
             'partial_count' => $partialCount,
-            'paid_count' => (int) ($rows->get(InvoiceStatus::Paid->value)?->count ?? 0),
-            'voided_count' => (int) ($rows->get(InvoiceStatus::Voided->value)?->count ?? 0),
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    private function reconciliation(string $date): array
-    {
-        $timezone = $this->currentClinic->get()->timezone;
-        $localStart = CarbonImmutable::parse($date, $timezone)->startOfDay();
-        $start = $localStart->setTimezone(config('app.timezone'));
-        $end = $localStart->addDay()->setTimezone(config('app.timezone'));
-        $rows = Payment::query()
-            ->where('clinic_id', $this->currentClinic->id())
-            ->where('received_at', '>=', $start)
-            ->where('received_at', '<', $end)
-            ->select(['method', 'status'])
-            ->selectRaw('COUNT(*) as aggregate_count, SUM(amount) as aggregate_total')
-            ->groupBy(['method', 'status'])
-            ->get();
-        $receivedTotal = 0;
-        $receivedCount = 0;
-        $voidedTotal = 0;
-        $voidedCount = 0;
-
-        foreach ($rows as $row) {
-            $count = (int) $row->getAttribute('aggregate_count');
-            $total = (int) $row->getAttribute('aggregate_total');
-
-            if ($row->status === PaymentStatus::Received) {
-                $receivedCount += $count;
-                $receivedTotal += $total;
-            } else {
-                $voidedCount += $count;
-                $voidedTotal += $total;
-            }
-        }
-
-        $byMethod = collect(PaymentMethod::cases())->map(function (PaymentMethod $method) use ($rows): array {
-            $methodRows = $rows->filter(fn (Payment $row): bool => $row->status === PaymentStatus::Received
-                && $row->method === $method);
-
-            return [
-                'label' => $method->label(),
-                'count' => (int) $methodRows->sum(fn (Payment $row): int => (int) $row->getAttribute('aggregate_count')),
-                'amount' => (int) $methodRows->sum(fn (Payment $row): int => (int) $row->getAttribute('aggregate_total')),
-            ];
-        })->values()->all();
-
-        return [
-            'received_count' => $receivedCount,
-            'received_amount' => $receivedTotal,
-            'voided_count' => $voidedCount,
-            'voided_amount' => $voidedTotal,
-            'net_amount' => $receivedTotal,
-            'by_method' => $byMethod,
+            'paid_count' => (int) ($rows->get(InvoiceStatus::Paid->value)->count ?? 0),
+            'voided_count' => (int) ($rows->get(InvoiceStatus::Voided->value)->count ?? 0),
         ];
     }
 }

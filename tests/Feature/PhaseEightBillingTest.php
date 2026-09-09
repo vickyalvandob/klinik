@@ -16,7 +16,9 @@ use App\PaymentStatus;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
 use App\SystemRole;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -207,6 +209,105 @@ test('billing routes hide invoices from another tenant', function () {
         ->get(route('billing.show', $foreign['invoice']))
         ->assertNotFound();
 });
+
+test('cashier worklist prioritizes the oldest unpaid invoices with stable ordering', function () {
+    $context = billableEncounter($this);
+    $oldest = additionalBillingInvoice($context, ['issued_at' => now()->subDay()]);
+    $newest = additionalBillingInvoice($context, ['issued_at' => $context['invoice']->issued_at]);
+
+    $this->actingAs($context['user'])->get(route('billing.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('invoices.data.0.uuid', $oldest->uuid)
+        ->where('invoices.data.1.uuid', $context['invoice']->uuid)
+        ->where('invoices.data.2.uuid', $newest->uuid)
+        ->where('summary.issued_count', 3)->where('summary.outstanding_amount', 300000)
+        ->missing('reconciliation')->missing('date'));
+});
+
+test('cashier summary uses one aggregate query and the worklist never queries payment reconciliation', function () {
+    $context = billableEncounter($this);
+    additionalBillingInvoice($context, ['status' => 'partially_paid', 'paid_amount' => 40000, 'balance_due' => 60000]);
+    additionalBillingInvoice($context, ['status' => 'paid', 'paid_amount' => 100000, 'balance_due' => 0]);
+    additionalBillingInvoice($context, ['status' => 'voided', 'balance_due' => 0]);
+    $this->actingAs($context['user'])->get(route('billing.index'))->assertOk();
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+
+    $response = $this->get(route('billing.index'));
+    $queries = collect(DB::getQueryLog())->pluck('query');
+    DB::disableQueryLog();
+
+    $response->assertInertia(fn (Assert $page) => $page
+        ->where('summary.outstanding_count', 2)->where('summary.outstanding_amount', 160000)
+        ->where('summary.partial_count', 1)->where('summary.paid_count', 1)->where('summary.voided_count', 1)
+        ->has('invoices.data', 1)->missing('reconciliation'));
+    expect($queries->filter(fn (string $sql): bool => str_contains($sql, '"invoices"') && str_contains($sql, 'group by')))->toHaveCount(1);
+    expect($queries->filter(fn (string $sql): bool => str_contains($sql, '"payments"')))->toBeEmpty();
+});
+
+test('partial billing search skips summary and protects the current clinic boundary', function () {
+    $context = billableEncounter($this);
+    $foreign = billableEncounter($this);
+    $foreign['patient']->update(['name' => 'Pasien Tersembunyi']);
+    $this->actingAs($context['user'])->withSession(['current_clinic_id' => $context['clinic']->id])->get(route('billing.index'))->assertOk();
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+
+    $response = $this->withHeaders(['X-Inertia' => 'true', 'X-Inertia-Version' => Inertia::getVersion(),
+        'X-Inertia-Partial-Component' => 'billing/index', 'X-Inertia-Partial-Data' => 'invoices,search'])
+        ->get(route('billing.index', ['search' => $context['patient']->medical_record_number]));
+    $queries = collect(DB::getQueryLog())->pluck('query');
+    DB::disableQueryLog();
+
+    $response->assertJsonCount(1, 'props.invoices.data')->assertJsonPath('props.invoices.data.0.uuid', $context['invoice']->uuid)
+        ->assertJsonMissingPath('props.summary')->assertJsonMissingPath('props.reconciliation');
+    expect($queries->filter(fn (string $sql): bool => str_contains($sql, 'group by') || str_contains($sql, '"payments"')))->toBeEmpty();
+
+    $this->get(route('billing.index', ['search' => 'Pasien Tersembunyi']))->assertJsonCount(0, 'props.invoices.data');
+});
+
+test('cashier filters reject invalid input', function (array $query, array $errors) {
+    $context = billableEncounter($this);
+
+    $this->actingAs($context['user'])->get(route('billing.index', $query))->assertSessionHasErrors($errors);
+})->with([
+    'invalid mode' => [['mode' => 'unknown'], ['mode' => 'Status tagihan tidak valid.']],
+    'array search' => [['search' => ['invalid']], ['search' => 'Masukkan kata pencarian yang valid.']],
+    'long search' => [['search' => str_repeat('a', 101)], ['search' => 'Pencarian maksimal 100 karakter.']],
+    'invalid page' => [['page' => 0], ['page' => 'Halaman minimal 1.']],
+]);
+
+test('successive partial payments return the current balance and a new submission token', function () {
+    $context = billableEncounter($this);
+    $token = (string) Str::uuid();
+
+    $this->actingAs($context['user'])->post(route('billing.payments.store', $context['invoice']), [
+        'payment_token' => $token, 'payments' => [['amount' => 20000, 'method' => 'cash']],
+    ])->assertSessionHasNoErrors()->assertRedirect(route('billing.show', $context['invoice']));
+    $response = $this->get(route('billing.show', $context['invoice']));
+    $nextToken = $response->viewData('page')['props']['paymentToken'];
+    $response->assertInertia(fn (Assert $page) => $page->where('invoice.balance_due', 80000)->where('can.receivePayment', true));
+    expect($nextToken)->toBeUuid()->not->toBe($token);
+
+    $this->post(route('billing.payments.store', $context['invoice']), [
+        'payment_token' => $nextToken, 'payments' => [['amount' => 30000, 'method' => 'card']],
+    ])->assertSessionHasNoErrors();
+    expect($context['invoice']->refresh()->balance_due)->toBe(50000);
+    expect(Payment::withoutGlobalScopes()->count())->toBe(2);
+});
+
+/** @param array<string, mixed> $context
+ * @param  array<string, mixed>  $attributes
+ */
+function additionalBillingInvoice(array $context, array $attributes): Invoice
+{
+    $encounter = Encounter::factory()->create([
+        'tenant_id' => $context['tenant']->id, 'clinic_id' => $context['clinic']->id,
+        'patient_id' => $context['patient']->id, 'service_unit_id' => $context['serviceUnit']->id,
+        'practitioner_id' => $context['practitioner']->id, 'registered_by' => $context['user']->id,
+    ]);
+
+    return Invoice::factory()->create(['encounter_id' => $encounter->id, ...$attributes]);
+}
 
 /** @return array<string, mixed> */
 function billableEncounter(TestCase $testCase, int $price = 100000): array

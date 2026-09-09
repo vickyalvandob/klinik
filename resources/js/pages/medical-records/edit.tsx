@@ -8,13 +8,13 @@ import {
     History,
     LockKeyhole,
     Pill,
-    Plus,
     Save,
-    Search,
     Stethoscope,
     Trash2,
+    PanelRightOpen,
+    ChevronRight,
 } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FormField } from '@/components/form-field';
 import {
     MedicalRecordFiles,
@@ -34,7 +34,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import { show as clinicalCatalog } from '@/routes/clinical-catalog';
+import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { ClinicalCatalogPicker } from '@/components/clinical-catalog-picker';
 import { store as startConsultation } from '@/routes/consultations';
 import { index as doctorQueue } from '@/routes/doctor-queue';
 import { store as storeAmendment } from '@/routes/medical-record-amendments';
@@ -63,15 +64,10 @@ type ClinicalFormData = {
     prescription_notes: string;
     prescription_items: PrescriptionRow[];
 };
-export default function MedicalRecordEdit({
-    encounter,
-    previousEncounters,
-    files,
-    can,
-}: {
+type MedicalRecordEditProps = {
     encounter: ClinicalEncounter;
     previousEncounters?: PreviousEncounter[];
-    files: ClinicalFile[];
+    files?: ClinicalFile[];
     can: {
         start: boolean;
         save: boolean;
@@ -79,7 +75,18 @@ export default function MedicalRecordEdit({
         amend: boolean;
         view_patient: boolean;
     };
-}) {
+};
+
+export default function MedicalRecordEdit(props: MedicalRecordEditProps) {
+    return <MedicalRecordWorkspace key={props.encounter.uuid} {...props} />;
+}
+
+function MedicalRecordWorkspace({
+    encounter,
+    previousEncounters,
+    files,
+    can,
+}: MedicalRecordEditProps) {
     const record = encounter.medical_record;
     const locked = record?.status === 'final' || record?.status === 'amended';
     const [confirmFinalization, setConfirmFinalization] = useState(false);
@@ -149,6 +156,7 @@ export default function MedicalRecordEdit({
         },
     ];
     const ready = requirements.every((item) => item.done);
+    const incomplete = requirements.filter((item) => !item.done);
     const focusField = (field: string) => {
         setSection(
             field.startsWith('prescription') || field.startsWith('procedures')
@@ -161,8 +169,13 @@ export default function MedicalRecordEdit({
             const target =
                 document.getElementById(field) ??
                 document.getElementById(field.split('.')[0]);
-            target?.scrollIntoView({ block: 'center' });
-            target?.focus();
+            const details = target?.closest('details');
+            if (details) details.open = true;
+            const input = target?.matches('input, textarea, select')
+                ? target
+                : target?.querySelector<HTMLElement>('input, textarea, select');
+            (input ?? target)?.scrollIntoView({ block: 'center' });
+            (input ?? target)?.focus();
         });
     };
     useEffect(() => {
@@ -194,6 +207,7 @@ export default function MedicalRecordEdit({
         setSavingIntent(intent);
         form.transform((data) => ({ ...data, intent }));
         form.put(update.url(encounter.uuid), {
+            only: intent === 'draft' ? ['encounter', 'can'] : undefined,
             preserveScroll: intent === 'draft',
             onSuccess: () => {
                 form.setDefaults();
@@ -239,12 +253,33 @@ export default function MedicalRecordEdit({
                                     </Button>
                                 </section>
                             )}
-                            <details className="bg-card rounded-xl border xl:hidden">
-                                <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-                                    Hasil pemeriksaan awal
-                                </summary>
-                                <TriageSection encounter={encounter} />
-                            </details>
+                            {locked && (
+                                <div className="bg-muted/30 flex items-start gap-3 rounded-lg border p-4 text-sm">
+                                    <LockKeyhole className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                                    <div>
+                                        <p className="font-medium">Pemeriksaan telah selesai</p>
+                                        <p className="text-muted-foreground mt-1 text-xs">Rekam medis terkunci. {can.amend ? 'Tambahkan koreksi melalui bagian Catatan & berkas.' : 'Data ditampilkan untuk dibaca.'}</p>
+                                    </div>
+                                </div>
+                            )}
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-between xl:hidden">
+                                        <span className="flex items-center gap-2"><PanelRightOpen /> Info pasien & riwayat</span>
+                                        <ChevronRight />
+                                    </Button>
+                                </SheetTrigger>
+                                <SheetContent className="w-full gap-0 sm:max-w-md">
+                                    <SheetHeader className="border-b pr-12">
+                                        <SheetTitle>Info pasien & riwayat</SheetTitle>
+                                        <SheetDescription>{encounter.patient.name} · {encounter.patient.medical_record_number}</SheetDescription>
+                                    </SheetHeader>
+                                    <div className="grid gap-4 overflow-y-auto p-4">
+                                        <TriageSection encounter={encounter} />
+                                        <ContextPanel encounter={encounter} previousEncounters={previousEncounters} canViewPatient={can.view_patient} />
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
                             <nav
                                 className="bg-muted/30 flex gap-1 rounded-lg border p-1"
                                 aria-label="Bagian rekam medis"
@@ -255,33 +290,36 @@ export default function MedicalRecordEdit({
                                             value: 'clinical',
                                             label: 'Pemeriksaan',
                                             icon: Stethoscope,
+                                            count: form.data.diagnoses.length ? `${form.data.diagnoses.length} diagnosis` : 'Wajib diisi',
                                         },
                                         {
                                             value: 'orders',
                                             label: 'Tindakan & resep',
                                             icon: Pill,
+                                            count: `${form.data.procedures.length} tindakan · ${form.data.prescription_items.length} obat`,
                                         },
                                         {
                                             value: 'additional',
                                             label: 'Catatan & berkas',
                                             icon: FileText,
+                                            count: 'Opsional',
                                         },
                                     ] as const
-                                ).map(({ value, label, icon: Icon }) => (
+                                ).map(({ value, label, icon: Icon, count }) => (
                                     <Button
                                         key={value}
                                         variant="ghost"
                                         size="sm"
                                         aria-pressed={section === value}
                                         className={cn(
-                                            'h-auto min-h-10 min-w-0 flex-1 flex-col gap-1 px-2 text-xs whitespace-normal sm:flex-row sm:text-sm',
+                                            'h-auto min-h-16 min-w-0 flex-1 flex-col gap-1 px-2 text-xs whitespace-normal sm:text-sm',
                                             section === value &&
                                                 'bg-background text-primary border',
                                         )}
                                         onClick={() => setSection(value)}
                                     >
-                                        <Icon className="size-4 shrink-0" />
-                                        {label}
+                                        <span className="flex items-center gap-1.5"><Icon className="hidden size-4 shrink-0 sm:block" />{label}</span>
+                                        <span className="text-muted-foreground text-[10px] font-normal sm:text-xs">{count}</span>
                                     </Button>
                                 ))}
                             </nav>
@@ -311,8 +349,7 @@ export default function MedicalRecordEdit({
                                     </div>
                                 </div>
                             )}
-                            <div
-                                hidden={section !== 'clinical'}
+                            {section === 'clinical' && <div
                                 className="space-y-5"
                             >
                                 <Section
@@ -401,7 +438,7 @@ export default function MedicalRecordEdit({
                                     description="Pilih satu diagnosis utama dan tambahkan diagnosis sekunder bila diperlukan."
                                 >
                                     {!locked && can.save && (
-                                        <CatalogPicker<DiagnosisOption>
+                                        <ClinicalCatalogPicker<DiagnosisOption>
                                             resource="diagnoses"
                                             placeholder="Cari kode atau nama diagnosis..."
                                             render={(item) =>
@@ -546,9 +583,8 @@ export default function MedicalRecordEdit({
                                         )}
                                     </div>
                                 </Section>
-                            </div>
-                            <div
-                                hidden={section !== 'orders'}
+                            </div>}
+                            {section === 'orders' && <div
                                 className="space-y-5"
                             >
                                 <Section
@@ -557,7 +593,7 @@ export default function MedicalRecordEdit({
                                     description="Tambahkan tindakan yang dilakukan pada kunjungan ini, bila ada."
                                 >
                                     {!locked && can.save && (
-                                        <CatalogPicker<ServiceOption>
+                                        <ClinicalCatalogPicker<ServiceOption>
                                             resource="services"
                                             placeholder="Cari tindakan atau layanan..."
                                             render={(item) =>
@@ -639,7 +675,7 @@ export default function MedicalRecordEdit({
                                     icon={<Pill className="size-4" />}
                                 >
                                     {!locked && can.save && (
-                                        <CatalogPicker<MedicineOption>
+                                        <ClinicalCatalogPicker<MedicineOption>
                                             resource="medicines"
                                             placeholder="Cari nama atau kode obat..."
                                             render={(item) =>
@@ -742,9 +778,8 @@ export default function MedicalRecordEdit({
                                         placeholder="Catatan untuk petugas farmasi (opsional)"
                                     />
                                 </Section>
-                            </div>
-                            <div
-                                hidden={section !== 'additional'}
+                            </div>}
+                            {section === 'additional' && <div
                                 className="space-y-5"
                             >
                                 <Section
@@ -774,24 +809,35 @@ export default function MedicalRecordEdit({
                                         canUpload={can.save || can.amend}
                                     />
                                 )}
+                                {!record && can.save && <EmptyText text="Simpan draft terlebih dahulu untuk menambahkan lampiran." />}
                                 {record && locked && (
                                     <AmendmentSection
                                         record={record}
                                         canAmend={can.amend}
                                     />
                                 )}
-                            </div>
+                            </div>}
                         </fieldset>
                     </main>
+                    <div className="hidden space-y-4 xl:sticky xl:top-4 xl:block">
+                    <TriageSection encounter={encounter} />
                     <ContextPanel
                         encounter={encounter}
                         previousEncounters={previousEncounters}
                         canViewPatient={can.view_patient}
                     />
+                    </div>
                 </div>
                 {can.save && !locked && (
                     <div className="bg-background/95 sticky bottom-0 z-30 mt-auto border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:px-6">
                         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+                            <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                <span className={cn('flex items-center gap-1.5 font-medium', ready ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}>
+                                    {ready ? <CheckCircle2 className="size-3.5" /> : <ClipboardPlus className="size-3.5" />}
+                                    {ready ? 'Siap diselesaikan' : `Lengkapi ${incomplete.length} bagian:`}
+                                </span>
+                                {incomplete.map((item) => <button key={item.field} type="button" onClick={() => focusField(item.field)} className="text-primary rounded py-1 underline underline-offset-4 focus-visible:ring-2 focus-visible:outline-none">{item.label}</button>)}
+                            </div>
                             <p
                                 className="text-muted-foreground flex w-full items-center gap-2 text-xs sm:w-auto"
                                 role="status"
@@ -840,7 +886,7 @@ export default function MedicalRecordEdit({
                                                 form.processing || !can.finalize
                                             }
                                         >
-                                            <LockKeyhole /> Finalisasi RME
+                                            <CheckCircle2 /> Selesaikan pemeriksaan
                                         </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
@@ -849,7 +895,7 @@ export default function MedicalRecordEdit({
                                                 <LockKeyhole className="size-5" />
                                             </span>
                                             <AlertDialogTitle>
-                                                Finalisasi rekam medis?
+                                                Selesaikan pemeriksaan?
                                             </AlertDialogTitle>
                                             <AlertDialogDescription>
                                                 Rekam medis{' '}
@@ -928,7 +974,7 @@ export default function MedicalRecordEdit({
                                                 ) : (
                                                     <LockKeyhole />
                                                 )}{' '}
-                                                Ya, Finalisasi
+                                                Ya, selesaikan
                                             </AlertDialogAction>
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
@@ -1173,6 +1219,7 @@ function TextAreaField({
     placeholder,
     rows = 5,
     required = false,
+    maxLength = 20000,
 }: {
     id: string;
     label: string;
@@ -1183,6 +1230,7 @@ function TextAreaField({
     placeholder?: string;
     rows?: number;
     required?: boolean;
+    maxLength?: number;
 }) {
     return (
         <FormField id={id} label={label} error={error} required={required}>
@@ -1195,210 +1243,14 @@ function TextAreaField({
                 aria-describedby={error ? `${id}-error` : undefined}
                 placeholder={disabled ? undefined : placeholder}
                 rows={rows}
+                maxLength={maxLength}
                 className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 disabled:bg-muted/30 w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed"
             />
         </FormField>
     );
 }
-function CatalogPicker<T extends { uuid: string }>({
-    resource,
-    placeholder,
-    render,
-    onSelect,
-    exclude,
-}: {
-    resource: 'diagnoses' | 'services' | 'medicines';
-    placeholder: string;
-    render: (item: T) => string;
-    onSelect: (item: T) => void;
-    exclude: string[];
-}) {
-    const id = useId();
-    const [query, setQuery] = useState('');
-    const [items, setItems] = useState<T[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [open, setOpen] = useState(false);
-    const [active, setActive] = useState(0);
-    const visibleItems = items.filter((item) => !exclude.includes(item.uuid));
-    const activeIndex = Math.min(active, Math.max(0, visibleItems.length - 1));
-    const select = (item: T) => {
-        onSelect(item);
-        setQuery('');
-        setItems([]);
-        setOpen(false);
-    };
-    useEffect(() => {
-        setItems([]);
-        setError(null);
-        setActive(0);
-        if (query.trim().length < 2) {
-            setLoading(false);
-            return;
-        }
-        const controller = new AbortController();
-        setLoading(true);
-        const timer = window.setTimeout(async () => {
-            try {
-                const response = await fetch(
-                    clinicalCatalog.url(resource, {
-                        query: { search: query.trim() },
-                    }),
-                    {
-                        headers: { Accept: 'application/json' },
-                        signal: controller.signal,
-                    },
-                );
-                if (!response.ok)
-                    throw new Error(
-                        'Pencarian gagal. Ubah kata kunci untuk mencoba kembali.',
-                    );
-                const data = (await response.json()) as { items: T[] };
-                if (!controller.signal.aborted) setItems(data.items);
-            } catch (reason) {
-                if (!controller.signal.aborted)
-                    setError(
-                        reason instanceof Error
-                            ? reason.message
-                            : 'Pencarian gagal.',
-                    );
-            } finally {
-                if (!controller.signal.aborted) setLoading(false);
-            }
-        }, 300);
-        return () => {
-            window.clearTimeout(timer);
-            controller.abort();
-        };
-    }, [query, resource]);
-    useEffect(() => {
-        if (open)
-            document
-                .getElementById(`${id}-${activeIndex}`)
-                ?.scrollIntoView({ block: 'nearest' });
-    }, [activeIndex, id, open]);
-    return (
-        <div
-            className="relative grid gap-2"
-            onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget))
-                    setOpen(false);
-            }}
-        >
-            <div className="relative">
-                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                <Input
-                    role="combobox"
-                    aria-label={placeholder}
-                    aria-expanded={open && query.trim().length >= 2}
-                    aria-controls={`${id}-results`}
-                    aria-autocomplete="list"
-                    aria-activedescendant={
-                        open && visibleItems.length
-                            ? `${id}-${activeIndex}`
-                            : undefined
-                    }
-                    value={query}
-                    onFocus={() => setOpen(true)}
-                    onChange={(event) => {
-                        setQuery(event.target.value);
-                        setOpen(true);
-                    }}
-                    placeholder={placeholder}
-                    className="pr-9 pl-9"
-                    onKeyDown={(event) => {
-                        if (event.key === 'Escape') {
-                            event.preventDefault();
-                            setOpen(false);
-                        } else if (
-                            event.key === 'ArrowDown' ||
-                            event.key === 'ArrowUp'
-                        ) {
-                            event.preventDefault();
-                            setOpen(true);
-                            setActive(
-                                Math.max(
-                                    0,
-                                    Math.min(
-                                        visibleItems.length - 1,
-                                        activeIndex +
-                                            (event.key === 'ArrowDown'
-                                                ? 1
-                                                : -1),
-                                    ),
-                                ),
-                            );
-                        } else if (event.key === 'Enter' && open) {
-                            event.preventDefault();
-                            if (visibleItems[activeIndex])
-                                select(visibleItems[activeIndex]);
-                        }
-                    }}
-                />
-                {loading && (
-                    <Spinner className="absolute top-1/2 right-3 -translate-y-1/2" />
-                )}
-            </div>
-            {open && query.trim().length >= 2 && (
-                <div className="bg-popover absolute top-full z-20 mt-1 w-full rounded-lg border p-1">
-                    <div
-                        id={`${id}-results`}
-                        role="listbox"
-                        aria-label="Hasil pencarian"
-                        className="max-h-56 overflow-y-auto"
-                    >
-                        {visibleItems.map((item, index) => (
-                            <button
-                                key={item.uuid}
-                                id={`${id}-${index}`}
-                                role="option"
-                                aria-selected={activeIndex === index}
-                                type="button"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => select(item)}
-                                className={cn(
-                                    'hover:bg-muted focus-visible:ring-ring flex w-full items-start gap-2 rounded-md px-3 py-2.5 text-left text-sm focus-visible:ring-2 focus-visible:outline-none',
-                                    activeIndex === index && 'bg-muted',
-                                )}
-                            >
-                                <Plus className="text-primary mt-0.5 size-4 shrink-0" />
-                                <span className="min-w-0 break-words">
-                                    {render(item)}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                    {(loading || error || visibleItems.length === 0) && (
-                        <p
-                            className={cn(
-                                'text-muted-foreground p-3 text-xs',
-                                error && 'text-destructive',
-                            )}
-                            role={error ? 'alert' : 'status'}
-                        >
-                            {loading
-                                ? 'Mencari...'
-                                : error ||
-                                  'Tidak ada hasil baru. Coba kata kunci lain.'}
-                        </p>
-                    )}
-                </div>
-            )}
-            {!query && (
-                <p className="text-muted-foreground text-xs">
-                    Ketik minimal 2 karakter untuk mencari.
-                </p>
-            )}
-        </div>
-    );
-}
 function PrescriptionItemEditor({
-    item,
-    index,
-    disabled,
-    errors,
-    onChange,
-    onRemove,
+    item, index, disabled, errors, onChange, onRemove,
 }: {
     item: PrescriptionRow;
     index: number;
@@ -1407,117 +1259,50 @@ function PrescriptionItemEditor({
     onChange: (changes: Partial<PrescriptionRow>) => void;
     onRemove: () => void;
 }) {
+    const fields = [
+        { key: 'dose_text', label: 'Dosis', placeholder: 'Contoh: 1 tablet' },
+        { key: 'frequency_text', label: 'Frekuensi', placeholder: 'Contoh: 3 kali sehari' },
+        { key: 'timing_text', label: 'Waktu pemberian', placeholder: 'Contoh: sesudah makan' },
+        { key: 'duration_text', label: 'Lama pemberian', placeholder: 'Contoh: 5 hari' },
+    ] as const;
+    const quantityId = `prescription_items.${index}.quantity`;
+    const instructionId = `prescription_items.${index}.instruction`;
+    const showDetails = fields.some(({ key }) => item[key] || errors[`prescription_items.${index}.${key}`]);
     return (
         <div className="bg-muted/20 grid gap-4 rounded-lg border p-4">
             <div className="flex items-start justify-between gap-3">
-                <div>
-                    <p className="text-sm font-semibold">
-                        {item.name} {item.strength}
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                        {item.dosage_form} · satuan {item.unit}
-                    </p>
+                <div className="min-w-0">
+                    <p className="text-sm font-semibold break-words">{item.name} {item.strength}</p>
+                    <p className="text-muted-foreground mt-1 text-xs">{item.dosage_form} ? satuan {item.unit}</p>
                 </div>
-                {!disabled && (
-                    <RemoveButton
-                        label={`Hapus ${item.name}`}
-                        onClick={onRemove}
-                    />
-                )}
+                {!disabled && <RemoveButton label={`Hapus ${item.name}`} onClick={onRemove} />}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <FormField
-                    id={`prescription_items.${index}.quantity`}
-                    label="Jumlah"
-                    error={errors[`prescription_items.${index}.quantity`]}
-                    required
-                >
-                    <Input
-                        id={`prescription_items.${index}.quantity`}
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={item.quantity}
-                        disabled={disabled}
-                        onChange={(event) =>
-                            onChange({ quantity: event.target.value })
-                        }
-                    />
+            <div className="grid items-start gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
+                <FormField id={quantityId} label={`Jumlah (${item.unit})`} error={errors[quantityId]} required>
+                    <Input id={quantityId} type="number" inputMode="decimal" min="0.01" max="999999" step="0.01"
+                        value={item.quantity} disabled={disabled} aria-invalid={Boolean(errors[quantityId])}
+                        aria-describedby={errors[quantityId] ? `${quantityId}-error` : undefined}
+                        onChange={(event) => onChange({ quantity: event.target.value })} />
                 </FormField>
-                <FormField
-                    id={`prescription_items.${index}.dose_text`}
-                    label="Dosis"
-                >
-                    <Input
-                        id={`prescription_items.${index}.dose_text`}
-                        value={item.dose_text ?? ''}
-                        disabled={disabled}
-                        placeholder="1 tablet"
-                        onChange={(event) =>
-                            onChange({ dose_text: event.target.value })
-                        }
-                    />
-                </FormField>
-                <FormField
-                    id={`prescription_items.${index}.frequency_text`}
-                    label="Frekuensi"
-                >
-                    <Input
-                        id={`prescription_items.${index}.frequency_text`}
-                        value={item.frequency_text ?? ''}
-                        disabled={disabled}
-                        placeholder="3 kali sehari"
-                        onChange={(event) =>
-                            onChange({ frequency_text: event.target.value })
-                        }
-                    />
-                </FormField>
-                <FormField
-                    id={`prescription_items.${index}.timing_text`}
-                    label="Waktu"
-                >
-                    <Input
-                        id={`prescription_items.${index}.timing_text`}
-                        value={item.timing_text ?? ''}
-                        disabled={disabled}
-                        placeholder="Sesudah makan"
-                        onChange={(event) =>
-                            onChange({ timing_text: event.target.value })
-                        }
-                    />
-                </FormField>
+                <TextAreaField id={instructionId} label="Aturan pakai untuk pasien" value={item.instruction}
+                    onChange={(value) => onChange({ instruction: value })} error={errors[instructionId]}
+                    disabled={disabled} required rows={2} maxLength={2000}
+                    placeholder="Tulis dosis, frekuensi, dan waktu pemakaian sesuai instruksi dokter" />
             </div>
-            <FormField
-                id={`prescription_items.${index}.duration_text`}
-                label="Lama pemberian"
-                error={errors[`prescription_items.${index}.duration_text`]}
-            >
-                <Input
-                    id={`prescription_items.${index}.duration_text`}
-                    value={item.duration_text ?? ''}
-                    disabled={disabled}
-                    placeholder="Contoh: 5 hari (opsional)"
-                    onChange={(event) =>
-                        onChange({ duration_text: event.target.value })
-                    }
-                />
-            </FormField>
-            <FormField
-                id={`prescription_items.${index}.instruction`}
-                label="Aturan pakai"
-                error={errors[`prescription_items.${index}.instruction`]}
-                required
-            >
-                <Input
-                    id={`prescription_items.${index}.instruction`}
-                    value={item.instruction}
-                    disabled={disabled}
-                    placeholder="Minum 1 tablet 3 kali sehari sesudah makan"
-                    onChange={(event) =>
-                        onChange({ instruction: event.target.value })
-                    }
-                />
-            </FormField>
+            <details open={showDetails || undefined} className="border-t pt-3">
+                <summary className="text-muted-foreground cursor-pointer rounded text-xs font-medium focus-visible:ring-2 focus-visible:outline-none">Rincian dosis (opsional)</summary>
+                <p className="text-muted-foreground mt-3 text-xs">Isi bila perlu dicatat terpisah. Pastikan sesuai dengan aturan pakai di atas.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {fields.map(({ key, label, placeholder }) => {
+                        const id = `prescription_items.${index}.${key}`;
+                        return <FormField key={key} id={id} label={label} error={errors[id]}>
+                            <Input id={id} value={item[key] ?? ''} disabled={disabled} placeholder={placeholder} maxLength={100}
+                                aria-invalid={Boolean(errors[id])} aria-describedby={errors[id] ? `${id}-error` : undefined}
+                                onChange={(event) => onChange({ [key]: event.target.value })} />
+                        </FormField>;
+                    })}
+                </div>
+            </details>
         </div>
     );
 }
@@ -1534,9 +1319,6 @@ function ContextPanel({
     const [loadingHistory, setLoadingHistory] = useState(false);
     return (
         <aside className="grid min-w-0 gap-4">
-            <div className="hidden xl:block">
-                <TriageSection encounter={encounter} />
-            </div>
             <section className="bg-card rounded-xl border p-4">
                 <h2 className="text-sm font-semibold">Kunjungan Saat Ini</h2>
                 <dl className="mt-3 grid gap-3 text-xs">

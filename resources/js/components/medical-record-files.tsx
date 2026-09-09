@@ -1,4 +1,5 @@
-import { Form } from '@inertiajs/react';
+import { Form, router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import { Paperclip, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +17,21 @@ export function MedicalRecordFiles({
     canUpload,
 }: {
     recordId: string;
-    files: ClinicalFile[];
+    files?: ClinicalFile[];
     canUpload: boolean;
 }) {
+    const [loading, setLoading] = useState(files === undefined);
+    const loadFiles = () => {
+        router.reload({
+            only: ['files'],
+            onStart: () => setLoading(true),
+            onFinish: () => setLoading(false),
+        });
+    };
+    useEffect(() => {
+        if (files === undefined) loadFiles();
+    }, [files]);
+
     return (
         <section className="bg-card grid gap-4 rounded-xl border p-4 md:p-5">
             <div>
@@ -30,12 +43,22 @@ export function MedicalRecordFiles({
                     akses RME yang dapat mengunduh.
                 </p>
             </div>
-            {files.length === 0 && (
+            {loading && files === undefined ? (
+                <div className="grid animate-pulse gap-2" role="status">
+                    <span className="sr-only">Memuat lampiran</span>
+                    <div className="bg-muted h-12 rounded-lg" />
+                </div>
+            ) : files === undefined ? (
+                <div className="grid justify-items-start gap-2 text-sm" role="alert">
+                    <p>Lampiran belum berhasil dimuat.</p>
+                    <Button variant="outline" size="sm" onClick={loadFiles}>Coba lagi</Button>
+                </div>
+            ) : files.length === 0 && (
                 <p className="text-muted-foreground text-sm">
                     Belum ada lampiran.
                 </p>
             )}
-            {files.map((file) => (
+            {files?.map((file) => (
                 <a
                     key={file.uuid}
                     href={show.url(file.uuid)}
@@ -53,6 +76,7 @@ export function MedicalRecordFiles({
             {canUpload && (
                 <Form
                     {...store.form(recordId)}
+                    options={{ only: ['files'], preserveScroll: true }}
                     resetOnSuccess
                     className="grid gap-3"
                 >

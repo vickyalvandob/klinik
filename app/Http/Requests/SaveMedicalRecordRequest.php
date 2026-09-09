@@ -105,17 +105,36 @@ class SaveMedicalRecordRequest extends FormRequest
     }
 
     /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'subjective.required' => 'Lengkapi keluhan dan riwayat sebelum menyelesaikan pemeriksaan.',
+            'assessment.required' => 'Lengkapi penilaian klinis sebelum menyelesaikan pemeriksaan.',
+            'plan.required' => 'Lengkapi rencana perawatan sebelum menyelesaikan pemeriksaan.',
+            'prescription_items.*.quantity.required' => 'Isi jumlah obat yang diresepkan.',
+            'prescription_items.*.quantity.gt' => 'Jumlah obat harus lebih dari 0.',
+            'prescription_items.*.instruction.required' => 'Tuliskan aturan pakai untuk setiap obat.',
+        ];
+    }
+
+    /** @return array<string, string> */
     public function attributes(): array
     {
         return [
-            'subjective' => 'subjective',
-            'assessment' => 'assessment',
-            'plan' => 'rencana',
+            'subjective' => 'keluhan dan riwayat',
+            'objective' => 'temuan pemeriksaan',
+            'assessment' => 'penilaian klinis',
+            'plan' => 'rencana perawatan',
+            'additional_notes' => 'catatan tambahan',
             'diagnoses' => 'diagnosis',
             'procedures' => 'tindakan',
             'prescription_items' => 'obat',
             'prescription_items.*.quantity' => 'jumlah obat',
             'prescription_items.*.instruction' => 'aturan pakai',
+            'prescription_items.*.dose_text' => 'dosis',
+            'prescription_items.*.frequency_text' => 'frekuensi',
+            'prescription_items.*.timing_text' => 'waktu pemberian',
+            'prescription_items.*.duration_text' => 'lama pemberian',
         ];
     }
 }

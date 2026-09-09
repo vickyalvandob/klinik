@@ -17,15 +17,6 @@ export type BillingInvoiceListItem = {
 
 export type BillingInvoicePage = Paginator<BillingInvoiceListItem>;
 
-export type BillingReconciliation = {
-    received_count: number;
-    received_amount: number;
-    voided_count: number;
-    voided_amount: number;
-    net_amount: number;
-    by_method: Array<{ label: string; count: number; amount: number }>;
-};
-
 export type BillingInvoice = {
     uuid: string;
     invoice_number: string;
