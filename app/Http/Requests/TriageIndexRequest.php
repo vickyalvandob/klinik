@@ -28,6 +28,7 @@ class TriageIndexRequest extends FormRequest
     {
         return [
             'mode' => ['nullable', Rule::in(['queue', 'completed'])],
+            'date' => ['nullable', 'date_format:Y-m-d'],
             'search' => ['nullable', 'string', 'max:100'],
             'service_unit' => ['nullable', 'uuid', Rule::exists('service_units', 'uuid')->where('clinic_id', app(CurrentClinic::class)->id())],
         ];
@@ -38,6 +39,7 @@ class TriageIndexRequest extends FormRequest
     {
         return [
             'mode.in' => 'Daftar pemeriksaan tidak valid.',
+            'date.date_format' => 'Pilih tanggal pemeriksaan yang valid.',
             'search.string' => 'Masukkan nama, nomor RM, atau nomor antrean.',
             'search.max' => 'Pencarian maksimal 100 karakter.',
             'service_unit.uuid' => 'Unit layanan tidak valid.',

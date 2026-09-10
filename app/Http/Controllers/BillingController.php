@@ -78,6 +78,7 @@ class BillingController extends Controller
         return Inertia::render('billing/index', [
             'mode' => $mode,
             'search' => $search,
+            'timezone' => $this->currentClinic->get()->timezone,
             'invoices' => $invoices,
             'summary' => fn (): array => $this->summary(),
         ]);

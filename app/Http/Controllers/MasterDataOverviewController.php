@@ -14,13 +14,7 @@ class MasterDataOverviewController extends Controller
         abort_unless($request->user()?->hasClinicPermission('master_data.manage'), 403);
 
         return Inertia::render('master-data/overview', [
-            'resources' => collect(MasterDataRegistry::all())
-                ->map(fn (array $definition, string $key): array => [
-                    'key' => $key,
-                    'label' => $definition['label'],
-                    'description' => $definition['description'],
-                ])
-                ->values(),
+            'resources' => MasterDataRegistry::navigation(),
         ]);
     }
 }

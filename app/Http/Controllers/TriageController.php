@@ -13,6 +13,7 @@ use App\Support\Tenancy\CurrentClinic;
 use App\TriageStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -27,19 +28,21 @@ class TriageController extends Controller
         Gate::authorize('viewAny', Triage::class);
 
         $clinic = $this->currentClinic->get();
-        $nextDate = now($clinic->timezone)->addDay()->toDateString();
-        $start = now($clinic->timezone)->startOfDay()->setTimezone(config('app.timezone'));
-        $end = now($clinic->timezone)->startOfDay()->addDay()->setTimezone(config('app.timezone'));
+        $today = now($clinic->timezone)->toDateString();
+        $nextDate = Carbon::parse($today)->addDay()->toDateString();
+        $date = $request->validated('date') ?? $today;
+        $start = Carbon::parse($date, $clinic->timezone)->startOfDay()->setTimezone(config('app.timezone'));
+        $end = Carbon::parse($date, $clinic->timezone)->startOfDay()->addDay()->setTimezone(config('app.timezone'));
         $mode = $request->string('mode')->toString() === 'completed' ? 'completed' : 'queue';
         $search = Str::squish($request->string('search')->toString());
         $unit = $request->string('service_unit')->toString();
 
         $encounters = fn (): array => Encounter::query()
             ->where('clinic_id', $clinic->id)
-            ->where('encounter_date', '<', $nextDate)
             ->when(
                 $mode === 'queue',
-                fn (Builder $query) => $query->where('status', EncounterStatus::WaitingTriage->value),
+                fn (Builder $query) => $query->where('status', EncounterStatus::WaitingTriage->value)
+                    ->where('encounter_date', '<', $nextDate),
                 fn (Builder $query) => $query->whereHas('triage', fn (Builder $query) => $query
                     ->where('status', TriageStatus::Completed->value)
                     ->where('completed_at', '>=', $start)
@@ -66,7 +69,15 @@ class TriageController extends Controller
                 'queueEntry:id,encounter_id,queue_number',
                 'triage:id,encounter_id,status,updated_at,completed_at',
             ])
-            ->orderBy('registered_at', $mode === 'queue' ? 'asc' : 'desc')
+            ->when(
+                $mode === 'queue',
+                fn (Builder $query) => $query->orderBy('registered_at'),
+                fn (Builder $query) => $query->orderByDesc(Triage::query()
+                    ->select('completed_at')
+                    ->where('clinic_id', $clinic->id)
+                    ->whereColumn('encounter_id', 'encounters.id')
+                    ->limit(1)),
+            )
             ->orderBy('id')
             ->paginate(15)
             ->withQueryString()
@@ -96,7 +107,8 @@ class TriageController extends Controller
         return Inertia::render('triages/index', [
             'encounters' => $encounters,
             'mode' => $mode,
-            'filters' => ['search' => $search, 'service_unit' => $unit],
+            'filters' => ['search' => $search, 'service_unit' => $unit, 'date' => $date],
+            'today' => $today,
             'timezone' => $clinic->timezone,
             'serviceUnits' => fn () => ServiceUnit::query()->where('clinic_id', $clinic->id)
                 ->orderBy('name')->get(['uuid', 'name']),

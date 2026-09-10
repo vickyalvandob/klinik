@@ -1,8 +1,6 @@
-﻿import { Head, Link, router } from '@inertiajs/react';
+﻿import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
     ArrowRight,
-    ClipboardList,
-    PackageCheck,
     Pill,
     RefreshCw,
     Search,
@@ -10,14 +8,14 @@ import {
     TriangleAlert,
     X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { PaginationLinks } from '@/components/pagination-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/date-picker';
+import { Spinner } from '@/components/ui/spinner';
 import { formatQuantity, pharmacyDateFormatter } from '@/lib/pharmacy';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
@@ -36,6 +34,7 @@ const listProps = [
     'search',
     'date',
     'stockStatus',
+    'today',
     'prescriptions',
     'stocks',
 ];
@@ -50,6 +49,7 @@ export default function PharmacyIndex({
     mode,
     search,
     date,
+    today,
     stockStatus,
     timezone,
     prescriptions,
@@ -60,6 +60,7 @@ export default function PharmacyIndex({
     mode: PharmacyMode;
     search: string;
     date: string;
+    today: string;
     stockStatus: PharmacyStockStatus;
     timezone: string;
     prescriptions: PharmacyPrescriptionPage | null;
@@ -67,7 +68,14 @@ export default function PharmacyIndex({
     summary: { new: number; processing: number; low_stock: number };
     can: { adjust_stock: boolean };
 }) {
-    const [loading, setLoading] = useState(false);
+    const [navigating, setNavigating] = useState(false);
+    const filters = useForm({ search, date, stock_status: stockStatus });
+    const { setData } = filters;
+    useEffect(
+        () => setData({ search, date, stock_status: stockStatus }),
+        [mode, search, date, stockStatus, setData],
+    );
+    const loading = navigating || filters.processing;
     const [selectedMedicine, setSelectedMedicine] =
         useState<MedicineStockItem | null>(null);
     const formatDateTime = useMemo(
@@ -76,44 +84,21 @@ export default function PharmacyIndex({
     );
     const page = mode === 'stock' ? stocks : prescriptions;
     const filtered =
-        !!search || !!date || (mode === 'stock' && stockStatus !== 'all');
+        !!search ||
+        (mode === 'history' && date !== today) ||
+        (mode === 'stock' && stockStatus !== 'all');
     const visitOptions = {
         only: listProps,
         preserveState: true,
         preserveScroll: true,
-        onStart: () => setLoading(true),
-        onFinish: () => setLoading(false),
+        onStart: () => setNavigating(true),
+        onFinish: () => setNavigating(false),
     };
-
-    function submitSearch(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        const values = new FormData(event.currentTarget);
-        const searchValue = values.get('search');
-        const dateValue = values.get('date');
-        const stockValue = values.get('stock_status');
-        router.get(
-            index.url(),
-            {
-                mode,
-                search:
-                    typeof searchValue === 'string' ? searchValue.trim() : '',
-                date:
-                    mode === 'history' && typeof dateValue === 'string'
-                        ? dateValue
-                        : '',
-                stock_status:
-                    mode === 'stock' && typeof stockValue === 'string'
-                        ? stockValue
-                        : 'all',
-            },
-            { ...visitOptions, replace: true },
-        );
-    }
 
     return (
         <>
             <Head title="Apotek" />
-            <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 md:p-6">
+            <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-1 flex-col gap-5 p-4 md:p-6">
                 <PageHeader
                     eyebrow="Pelayanan obat"
                     title="Apotek"
@@ -140,62 +125,9 @@ export default function PharmacyIndex({
                         </Button>
                     }
                 />
-                <div className="bg-card grid grid-cols-3 divide-x rounded-xl border">
-                    {[
-                        {
-                            label: 'Resep baru',
-                            value: summary.new,
-                            mode: 'new',
-                            icon: ClipboardList,
-                        },
-                        {
-                            label: 'Disiapkan',
-                            value: summary.processing,
-                            mode: 'processing',
-                            icon: PackageCheck,
-                        },
-                        {
-                            label: 'Stok menipis',
-                            value: summary.low_stock,
-                            mode: 'stock',
-                            icon: TriangleAlert,
-                        },
-                    ].map((item) => (
-                        <Link
-                            key={item.mode}
-                            href={index({
-                                query: {
-                                    mode: item.mode,
-                                    ...(item.mode === 'stock'
-                                        ? { stock_status: 'low' }
-                                        : {}),
-                                },
-                            })}
-                            {...visitOptions}
-                            className="hover:bg-muted/40 focus-visible:ring-ring flex min-w-0 items-center justify-between gap-2 p-3 first:rounded-l-xl last:rounded-r-xl focus-visible:ring-2 focus-visible:outline-none sm:p-4"
-                        >
-                            <div>
-                                <p className="text-muted-foreground text-xs">
-                                    {item.label}
-                                </p>
-                                <p className="mt-1 text-2xl font-semibold tabular-nums">
-                                    {item.value}
-                                </p>
-                            </div>
-                            <item.icon
-                                className={cn(
-                                    'hidden size-5 shrink-0 sm:block',
-                                    item.mode === 'stock' && item.value > 0
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : 'text-muted-foreground',
-                                )}
-                            />
-                        </Link>
-                    ))}
-                </div>
                 <section className="bg-card min-w-0 overflow-hidden rounded-xl border">
                     <nav
-                        className="grid grid-cols-4 border-b px-1 sm:flex sm:gap-5 sm:px-4"
+                        className="grid grid-cols-4 border-b px-2 lg:flex"
                         aria-label="Bagian apotek"
                     >
                         {modes.map((item) => (
@@ -207,66 +139,148 @@ export default function PharmacyIndex({
                                     mode === item.value ? 'page' : undefined
                                 }
                                 className={cn(
-                                    'focus-visible:ring-ring -mb-px border-b-2 px-1 py-3 text-center text-xs font-medium focus-visible:ring-2 focus-visible:outline-none sm:px-0 sm:text-sm',
+                                    'focus-visible:ring-ring -mb-px flex min-w-0 flex-col items-center justify-center gap-1.5 border-b-2 px-1 py-3 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none lg:flex-row lg:gap-2 lg:px-4 lg:text-sm',
                                     mode === item.value
                                         ? 'border-primary text-foreground'
                                         : 'text-muted-foreground hover:text-foreground border-transparent',
                                 )}
                             >
                                 {item.label}
+                                {(item.value === 'new' ||
+                                    item.value === 'processing') && (
+                                    <span
+                                        className={cn(
+                                            'rounded-md px-1.5 py-0.5 text-xs tabular-nums',
+                                            mode === item.value
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'bg-muted text-muted-foreground',
+                                        )}
+                                    >
+                                        {summary[item.value]}
+                                    </span>
+                                )}
                             </Link>
                         ))}
                     </nav>
                     <form
-                        key={`${mode}-${search}-${date}-${stockStatus}`}
-                        onSubmit={submitSearch}
-                        className="grid gap-3 border-b p-4 sm:flex sm:flex-wrap sm:items-end"
+                        aria-label="Filter apotek"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            filters.transform((data) => ({
+                                mode,
+                                search: data.search.trim(),
+                                date: mode === 'history' ? data.date : '',
+                                stock_status:
+                                    mode === 'stock'
+                                        ? data.stock_status
+                                        : 'all',
+                            }));
+                            filters.get(index.url(), {
+                                ...visitOptions,
+                                replace: true,
+                            });
+                        }}
+                        className="space-y-2 border-b p-4"
                     >
-                        <div className="grid min-w-0 gap-2 sm:min-w-56 sm:flex-1">
-                            <Label htmlFor="pharmacy-search">
-                                {mode === 'stock' ? 'Cari obat' : 'Cari resep'}
-                            </Label>
-                            <div className="relative">
-                                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                                <Input
-                                    id="pharmacy-search"
-                                    name="search"
-                                    type="search"
-                                    maxLength={100}
-                                    defaultValue={search}
-                                    className="pl-9"
-                                    placeholder={
-                                        mode === 'stock'
-                                            ? 'Nama, kode, atau generik'
-                                            : 'Nama pasien, nomor RM, atau registrasi'
-                                    }
-                                />
+                        <fieldset
+                            disabled={loading}
+                            className="flex min-w-0 flex-wrap items-center gap-2 disabled:opacity-60"
+                        >
+                            <div
+                                className={cn(
+                                    'flex min-w-0 flex-1 items-center gap-2',
+                                    mode === 'history' || mode === 'stock'
+                                        ? 'basis-full lg:basis-48'
+                                        : 'basis-40',
+                                )}
+                            >
+                                <div className="relative min-w-0 flex-1">
+                                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                                    <Input
+                                        id="pharmacy-search"
+                                        name="search"
+                                        type="search"
+                                        aria-label={
+                                            mode === 'stock'
+                                                ? 'Cari obat'
+                                                : 'Cari resep'
+                                        }
+                                        aria-invalid={Boolean(
+                                            filters.errors.search,
+                                        )}
+                                        maxLength={100}
+                                        value={filters.data.search}
+                                        onChange={(event) =>
+                                            filters.setData(
+                                                'search',
+                                                event.target.value,
+                                            )
+                                        }
+                                        className="pl-9"
+                                        placeholder={
+                                            mode === 'stock'
+                                                ? 'Cari nama, kode, atau generik'
+                                                : 'Cari pasien, RM, atau registrasi'
+                                        }
+                                    />
+                                </div>
+                                {filtered && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Reset filter"
+                                        onClick={() =>
+                                            router.get(
+                                                index.url(),
+                                                { mode },
+                                                {
+                                                    ...visitOptions,
+                                                    replace: true,
+                                                },
+                                            )
+                                        }
+                                    >
+                                        <X />
+                                    </Button>
+                                )}
                             </div>
-                        </div>
-                        {mode === 'history' && (
-                            <div className="grid min-w-0 gap-2">
-                                <Label htmlFor="pharmacy-date">
-                                    Tanggal selesai
-                                </Label>
-                                <Input
-                                    id="pharmacy-date"
-                                    name="date"
-                                    type="date"
-                                    defaultValue={date}
-                                    className="w-full sm:w-44"
-                                />
-                            </div>
-                        )}
-                        {mode === 'stock' && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="stock-status">
-                                    Kondisi stok
-                                </Label>
+                            {mode === 'history' && (
+                                <div className="min-w-40 flex-1 lg:max-w-44">
+                                    <label
+                                        htmlFor="pharmacy-date"
+                                        className="sr-only"
+                                    >
+                                        Tanggal selesai
+                                    </label>
+                                    <DatePicker
+                                        id="pharmacy-date"
+                                        today={today}
+                                        value={filters.data.date}
+                                        disabled={loading}
+                                        onChange={(value) =>
+                                            filters.setData('date', value)
+                                        }
+                                        aria-invalid={Boolean(
+                                            filters.errors.date,
+                                        )}
+                                    />
+                                </div>
+                            )}
+                            {mode === 'stock' && (
                                 <select
                                     id="stock-status"
                                     name="stock_status"
-                                    defaultValue={stockStatus}
-                                    className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                    aria-label="Kondisi stok"
+                                    value={filters.data.stock_status}
+                                    onChange={(event) =>
+                                        filters.setData(
+                                            'stock_status',
+                                            event.target
+                                                .value as PharmacyStockStatus,
+                                        )
+                                    }
+                                    className="border-input bg-background focus-visible:ring-ring h-9 min-w-0 flex-1 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none lg:max-w-44"
                                 >
                                     <option value="all">Semua obat</option>
                                     <option value="low">Stok menipis</option>
@@ -275,56 +289,69 @@ export default function PharmacyIndex({
                                         Obat nonaktif
                                     </option>
                                 </select>
-                            </div>
-                        )}
-                        <div className="flex gap-2">
-                            <Button
-                                type="submit"
-                                variant="outline"
-                                disabled={loading}
-                                className="flex-1 sm:flex-none"
-                            >
-                                Terapkan
-                            </Button>
-                            {filtered && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    disabled={loading}
-                                    onClick={() =>
-                                        router.get(
-                                            index.url(),
-                                            { mode },
-                                            { ...visitOptions, replace: true },
-                                        )
-                                    }
-                                >
-                                    <X className="size-4" />
-                                    Reset
-                                </Button>
                             )}
-                        </div>
+                            <Button type="submit" variant="outline">
+                                {loading ? <Spinner /> : <Search />} Cari
+                            </Button>
+                        </fieldset>
+                        {Object.entries(filters.errors).map(
+                            ([field, message]) => (
+                                <p
+                                    key={field}
+                                    role="alert"
+                                    className="text-destructive text-xs"
+                                >
+                                    {message}
+                                </p>
+                            ),
+                        )}
                     </form>
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
-                        <h2 className="text-sm font-semibold">
-                            {modes.find((item) => item.value === mode)?.label}
-                            <span className="text-muted-foreground ml-2 font-normal">
-                                {page?.total ?? 0}
-                            </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 text-xs">
+                        <h2 className="font-medium">
+                            {page?.total ?? 0}{' '}
+                            {mode === 'stock' ? 'obat' : 'resep'}
                         </h2>
-                        <p
-                            className="text-muted-foreground text-xs"
-                            role="status"
+                        <Link
+                            href={index({
+                                query: { mode: 'stock', stock_status: 'low' },
+                            })}
+                            {...visitOptions}
+                            className={cn(
+                                'focus-visible:ring-ring flex items-center gap-1.5 rounded-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none',
+                                summary.low_stock > 0
+                                    ? 'text-amber-800 dark:text-amber-300'
+                                    : 'text-muted-foreground',
+                            )}
                         >
-                            {loading
-                                ? 'Memperbarui daftar…'
-                                : mode === 'history'
-                                  ? 'Terakhir selesai di atas'
-                                  : mode === 'stock'
-                                    ? 'Stok terkini saat halaman dimuat'
-                                    : 'Resep terlama didahulukan'}
-                        </p>
+                            <TriangleAlert className="size-3.5" />{' '}
+                            {summary.low_stock} stok menipis{' '}
+                            <ArrowRight className="size-3" />
+                        </Link>
                     </div>
+                    {Boolean(page?.data.length) && (
+                        <div
+                            aria-hidden="true"
+                            className={cn(
+                                'bg-muted/30 text-muted-foreground hidden gap-4 border-b px-4 py-3 text-xs lg:grid',
+                                mode === 'stock'
+                                    ? 'grid-cols-[minmax(0,1fr)_8rem_9rem_8rem]'
+                                    : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9rem_8rem]',
+                            )}
+                        >
+                            <span>{mode === 'stock' ? 'Obat' : 'Pasien'}</span>
+                            <span>
+                                {mode === 'stock' ? 'Stok tersedia' : 'Resep'}
+                            </span>
+                            <span>
+                                {mode === 'stock'
+                                    ? 'Diperbarui'
+                                    : mode === 'history'
+                                      ? 'Selesai'
+                                      : 'Diresepkan'}
+                            </span>
+                            <span className="text-right">Aksi</span>
+                        </div>
+                    )}
                     <div
                         aria-busy={loading}
                         className={cn(loading && 'opacity-60')}
@@ -338,18 +365,18 @@ export default function PharmacyIndex({
                                         : mode === 'stock'
                                           ? 'Belum ada data obat'
                                           : mode === 'processing'
-                                            ? 'Tidak ada resep yang sedang disiapkan'
+                                            ? 'Belum ada resep disiapkan'
                                             : mode === 'history'
                                               ? 'Belum ada riwayat resep'
-                                              : 'Semua resep baru sudah ditangani'}
+                                              : 'Tidak ada resep baru'}
                                 </h3>
                                 <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">
                                     {filtered
-                                        ? 'Coba kata pencarian lain atau reset filter.'
+                                        ? 'Coba kata kunci atau filter lain.'
                                         : mode === 'new'
-                                          ? 'Resep baru tampil setelah rekam medis difinalisasi oleh dokter.'
+                                          ? 'Resep dari dokter akan tampil di sini.'
                                           : mode === 'history'
-                                            ? 'Resep yang diserahkan atau dibatalkan akan tersimpan di sini.'
+                                            ? 'Tidak ada resep selesai pada tanggal ini.'
                                             : mode === 'stock'
                                               ? 'Tambahkan obat melalui Master Data sesuai hak akses Anda.'
                                               : 'Pilih resep baru untuk mulai menyiapkan obat.'}
@@ -360,9 +387,9 @@ export default function PharmacyIndex({
                                 {stocks.data.map((medicine) => (
                                     <article
                                         key={medicine.uuid}
-                                        className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]"
+                                        className="hover:bg-muted/25 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 transition-colors lg:grid-cols-[minmax(0,1fr)_8rem_9rem_8rem] lg:gap-4"
                                     >
-                                        <div className="min-w-0">
+                                        <div className="col-span-2 min-w-0 lg:col-span-1">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <h3 className="text-sm font-semibold break-words">
                                                     {medicine.name}{' '}
@@ -400,7 +427,7 @@ export default function PharmacyIndex({
                                                     : ''}
                                             </p>
                                         </div>
-                                        <div className="flex items-baseline gap-2 lg:block">
+                                        <div className="min-w-0">
                                             <p className="text-sm font-semibold tabular-nums">
                                                 {formatQuantity(
                                                     medicine.quantity,
@@ -409,7 +436,7 @@ export default function PharmacyIndex({
                                                     {medicine.unit}
                                                 </span>
                                             </p>
-                                            <p className="text-muted-foreground text-xs lg:mt-1">
+                                            <p className="text-muted-foreground mt-1 text-xs">
                                                 Min.{' '}
                                                 {formatQuantity(
                                                     medicine.minimum_stock,
@@ -417,11 +444,11 @@ export default function PharmacyIndex({
                                                 {medicine.unit}
                                             </p>
                                         </div>
-                                        <div className="text-xs">
-                                            <p className="text-muted-foreground">
-                                                Terakhir berubah
+                                        <div className="text-muted-foreground order-last col-span-2 text-xs lg:order-none lg:col-span-1">
+                                            <p className="inline lg:sr-only">
+                                                Diperbarui{' '}
                                             </p>
-                                            <p className="mt-1">
+                                            <p className="inline lg:block">
                                                 {formatDateTime(
                                                     medicine.last_movement_at,
                                                 )}
@@ -431,6 +458,7 @@ export default function PharmacyIndex({
                                             <Button
                                                 variant="outline"
                                                 size="sm"
+                                                className="justify-self-end"
                                                 onClick={() =>
                                                     setSelectedMedicine(
                                                         medicine,
@@ -450,13 +478,30 @@ export default function PharmacyIndex({
                                 {prescriptions.data.map((prescription) => (
                                     <article
                                         key={prescription.uuid}
-                                        className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center xl:grid-cols-[minmax(0,1fr)_12rem_auto]"
+                                        className="hover:bg-muted/25 grid gap-3 p-4 transition-colors lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9rem_8rem] lg:items-center lg:gap-4"
                                     >
                                         <div className="min-w-0">
+                                            <h3 className="text-sm font-semibold break-words">
+                                                {prescription.patient.name}
+                                            </h3>
+                                            <p className="text-muted-foreground mt-1 text-xs break-words">
+                                                {
+                                                    prescription.patient
+                                                        .medical_record_number
+                                                }
+                                            </p>
+                                            <p className="text-muted-foreground mt-1 text-xs break-words">
+                                                {
+                                                    prescription.registration_number
+                                                }
+                                            </p>
+                                        </div>
+                                        <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h3 className="text-sm font-semibold break-words">
-                                                    {prescription.patient.name}
-                                                </h3>
+                                                <p className="text-xs font-medium">
+                                                    {prescription.items_count}{' '}
+                                                    item obat
+                                                </p>
                                                 <Badge
                                                     variant={
                                                         prescription.status ===
@@ -464,59 +509,40 @@ export default function PharmacyIndex({
                                                             ? 'secondary'
                                                             : 'outline'
                                                     }
+                                                    className="text-[11px] font-normal"
                                                 >
                                                     {prescription.status_label}
                                                 </Badge>
                                             </div>
                                             <p className="text-muted-foreground mt-1 text-xs break-words">
-                                                {
-                                                    prescription.patient
-                                                        .medical_record_number
-                                                }{' '}
-                                                ·{' '}
-                                                {
-                                                    prescription.registration_number
-                                                }
-                                            </p>
-                                            <p className="mt-2 text-xs">
-                                                {prescription.items_count} item
-                                                obat{' '}
-                                                <span className="text-muted-foreground">
-                                                    · {prescription.doctor}
-                                                </span>
+                                                {prescription.doctor}
                                             </p>
                                         </div>
-                                        <div>
-                                            <p className="text-muted-foreground text-xs">
+                                        <div className="text-muted-foreground text-xs">
+                                            <span className="lg:sr-only">
                                                 {mode === 'history'
                                                     ? prescription.status ===
                                                       'cancelled'
-                                                        ? 'Dibatalkan'
-                                                        : 'Diserahkan'
-                                                    : 'Diresepkan'}
-                                            </p>
-                                            <p className="mt-1 text-xs">
-                                                {formatDateTime(
-                                                    mode === 'history'
-                                                        ? (prescription.dispensed_at ??
-                                                              prescription.cancelled_at)
-                                                        : prescription.prescribed_at,
-                                                )}
-                                            </p>
-                                            {mode === 'processing' && (
-                                                <p className="text-muted-foreground mt-1 text-xs">
-                                                    Disiapkan{' '}
-                                                    {formatDateTime(
-                                                        prescription.processing_started_at,
-                                                    )}
-                                                </p>
+                                                        ? 'Dibatalkan '
+                                                        : 'Diserahkan '
+                                                    : 'Diresepkan '}
+                                            </span>
+                                            {formatDateTime(
+                                                mode === 'history'
+                                                    ? (prescription.dispensed_at ??
+                                                          prescription.cancelled_at)
+                                                    : prescription.prescribed_at,
                                             )}
                                         </div>
                                         <Button
                                             asChild
                                             size="sm"
-                                            variant="outline"
-                                            className="sm:col-span-2 xl:col-span-1"
+                                            variant={
+                                                mode === 'history'
+                                                    ? 'outline'
+                                                    : 'default'
+                                            }
+                                            className="h-9 justify-self-start lg:justify-self-end"
                                         >
                                             <Link
                                                 href={show(prescription.uuid, {
@@ -535,7 +561,7 @@ export default function PharmacyIndex({
                                                 })}
                                                 aria-label={`Buka resep ${prescription.patient.name}`}
                                             >
-                                                Buka resep
+                                                Buka resep{' '}
                                                 <ArrowRight className="size-3.5" />
                                             </Link>
                                         </Button>

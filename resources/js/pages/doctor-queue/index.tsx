@@ -2,15 +2,13 @@ import { Form, Head, Link, router, useForm } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowUpRight,
-    CalendarDays,
     FileText,
     Play,
     Search,
     X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { DatePicker } from '@/components/date-picker';
-import { FormField } from '@/components/form-field';
+import { useEffect } from 'react';
+import { DateRangePicker } from '@/components/date-range-picker';
 import { PageHeader } from '@/components/page-header';
 import { PaginationLinks } from '@/components/pagination-links';
 import { Button } from '@/components/ui/button';
@@ -59,9 +57,6 @@ export default function DoctorQueueIndex({
     today: string;
 }) {
     const filter = useForm(filters);
-    const [datesOpen, setDatesOpen] = useState(
-        Boolean(filters.from || filters.to),
-    );
     const { setData } = filter;
     useEffect(() => setData(filters), [filters, setData]);
     const hasCustomDates = filters.from !== today || filters.to !== today;
@@ -71,12 +66,13 @@ export default function DoctorQueueIndex({
             <Head title="Rekam Medis" />
             <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-6">
                 <PageHeader
-                    title="Rekam Medis"
-                    description={
+                    eyebrow={
                         scope === 'practitioner' && practitioner
                             ? `${practitioner.name}${practitioner.specialization ? ` · ${practitioner.specialization}` : ''}`
-                            : undefined
+                            : 'Pemeriksaan dokter'
                     }
+                    title="Rekam Medis"
+                    description="Catat hasil pemeriksaan dan telusuri riwayat medis pasien."
                 />
                 {scope === 'practitioner' && !practitioner && (
                     <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50/60 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
@@ -131,7 +127,8 @@ export default function DoctorQueueIndex({
                     <div className="border-b p-4">
                         <form
                             noValidate
-                            className="flex flex-wrap items-start gap-2"
+                            aria-label="Filter rekam medis"
+                            className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]"
                             onSubmit={(event) => {
                                 event.preventDefault();
                                 filter.transform((data) => ({ ...data, mode }));
@@ -140,18 +137,14 @@ export default function DoctorQueueIndex({
                                     preserveState: true,
                                     preserveScroll: true,
                                     replace: true,
-                                    onError: (errors) => {
-                                        if (errors.from || errors.to) {
-                                            setDatesOpen(true);
-                                        }
-                                    },
                                 });
                             }}
                         >
-                            <div className="relative min-w-0 flex-1 basis-full sm:basis-56">
+                            <div className="relative col-span-2 min-w-0 lg:col-span-1">
                                 <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                                 <Input
                                     id="record-search"
+                                    type="search"
                                     aria-label="Cari pasien"
                                     aria-invalid={Boolean(filter.errors.search)}
                                     aria-describedby={
@@ -171,123 +164,89 @@ export default function DoctorQueueIndex({
                                     className="pl-9"
                                 />
                             </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                aria-expanded={datesOpen}
-                                aria-controls="record-date-filters"
-                                onClick={() => setDatesOpen(!datesOpen)}
-                            >
-                                <CalendarDays /> Tanggal
-                                {hasCustomDates && (
-                                    <span className="bg-primary size-1.5 rounded-full">
-                                        <span className="sr-only">
-                                            Filter aktif
-                                        </span>
-                                    </span>
-                                )}
-                            </Button>
-                            <Button type="submit" disabled={filter.processing}>
-                                {filter.processing ? <Spinner /> : <Search />}{' '}
-                                Cari
-                            </Button>
-                            {hasFilters && (
+                            <div className="min-w-0 lg:w-64">
+                                <DateRangePicker
+                                    id="record-date-range"
+                                    from={filter.data.from}
+                                    to={filter.data.to}
+                                    today={today}
+                                    disabled={filter.processing}
+                                    onChange={(range) =>
+                                        filter.setData((data) => ({
+                                            ...data,
+                                            ...range,
+                                        }))
+                                    }
+                                    aria-invalid={Boolean(
+                                        filter.errors.from || filter.errors.to,
+                                    )}
+                                    aria-describedby={
+                                        filter.errors.from || filter.errors.to
+                                            ? 'record-date-range-error'
+                                            : undefined
+                                    }
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
                                 <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => {
-                                        filter.setData({
-                                            search: '',
-                                            from: today,
-                                            to: today,
-                                        });
-                                        filter.clearErrors();
-                                        setDatesOpen(true);
-                                        router.get(
-                                            index.url(),
-                                            { mode },
-                                            {
-                                                only: listProps,
-                                                preserveState: true,
-                                                preserveScroll: true,
-                                                replace: true,
-                                            },
-                                        );
-                                    }}
+                                    type="submit"
+                                    disabled={filter.processing}
                                 >
-                                    <X /> Reset
+                                    {filter.processing ? (
+                                        <Spinner />
+                                    ) : (
+                                        <Search />
+                                    )}{' '}
+                                    Cari
                                 </Button>
-                            )}
+                                {hasFilters && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Reset filter"
+                                        disabled={filter.processing}
+                                        onClick={() => {
+                                            filter.setData({
+                                                search: '',
+                                                from: today,
+                                                to: today,
+                                            });
+                                            filter.clearErrors();
+                                            router.get(
+                                                index.url(),
+                                                { mode },
+                                                {
+                                                    only: listProps,
+                                                    preserveState: true,
+                                                    preserveScroll: true,
+                                                    replace: true,
+                                                },
+                                            );
+                                        }}
+                                    >
+                                        <X />
+                                    </Button>
+                                )}
+                            </div>
                             {filter.errors.search && (
                                 <p
                                     id="record-search-error"
                                     role="alert"
-                                    className="text-destructive w-full text-xs"
+                                    className="text-destructive col-span-full text-xs"
                                 >
                                     {filter.errors.search}
                                 </p>
                             )}
-                            <div
-                                id="record-date-filters"
-                                hidden={!datesOpen}
-                                className="w-full"
-                            >
-                                <div className="grid grid-cols-2 gap-3 pt-2 sm:max-w-lg">
-                                    <FormField
-                                        id="record-from"
-                                        label="Dari tanggal"
-                                        error={filter.errors.from}
-                                    >
-                                        <DatePicker
-                                            id="record-from"
-                                            today={today}
-                                            aria-invalid={Boolean(
-                                                filter.errors.from,
-                                            )}
-                                            aria-describedby={
-                                                filter.errors.from
-                                                    ? 'record-from-error'
-                                                    : undefined
-                                            }
-                                            value={filter.data.from}
-                                            onChange={(from) =>
-                                                filter.setData((data) => ({
-                                                    ...data,
-                                                    from,
-                                                    to:
-                                                        data.to &&
-                                                        data.to < from
-                                                            ? from
-                                                            : data.to,
-                                                }))
-                                            }
-                                        />
-                                    </FormField>
-                                    <FormField
-                                        id="record-to"
-                                        label="Sampai tanggal"
-                                        error={filter.errors.to}
-                                    >
-                                        <DatePicker
-                                            id="record-to"
-                                            today={today}
-                                            aria-invalid={Boolean(
-                                                filter.errors.to,
-                                            )}
-                                            aria-describedby={
-                                                filter.errors.to
-                                                    ? 'record-to-error'
-                                                    : undefined
-                                            }
-                                            min={filter.data.from || undefined}
-                                            value={filter.data.to}
-                                            onChange={(value) =>
-                                                filter.setData('to', value)
-                                            }
-                                        />
-                                    </FormField>
-                                </div>
-                            </div>
+                            {(filter.errors.from || filter.errors.to) && (
+                                <p
+                                    id="record-date-range-error"
+                                    role="alert"
+                                    className="text-destructive col-span-full text-xs"
+                                >
+                                    {filter.errors.from || filter.errors.to}
+                                </p>
+                            )}
                         </form>
                     </div>
                     <div className="bg-muted/30 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_11rem_9rem_10rem] gap-4 border-b px-5 py-3 text-xs font-medium lg:grid">

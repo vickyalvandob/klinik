@@ -146,19 +146,6 @@ export default function Dashboard({
                         />
                     )}
                 </section>
-                <section className="bg-muted/30 rounded-xl border p-4">
-                    <h2 className="text-sm font-semibold">Alur pelayanan</h2>
-                    <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-                        Pendaftaran → Pemeriksaan Awal → Dokter → Apotek bila
-                        ada resep → Kasir → Selesai.
-                    </p>
-                    {permissions.includes('registration.view') && (
-                        <p className="text-muted-foreground mt-1 text-xs">
-                            Daftar dan riwayat kunjungan tersedia di menu
-                            Pendaftaran.
-                        </p>
-                    )}
-                </section>
             </div>
         </>
     );

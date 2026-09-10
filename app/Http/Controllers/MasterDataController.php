@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\MasterDataIndexRequest;
 use App\Http\Requests\UpsertMasterDataRequest;
 use App\Models\ClinicService;
 use App\Models\Medicine;
@@ -10,6 +11,7 @@ use App\Models\ServiceUnit;
 use App\Models\StaffProfile;
 use App\Support\MasterDataRegistry;
 use App\Support\Tenancy\CurrentClinic;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -23,16 +25,56 @@ class MasterDataController extends Controller
 {
     public function __construct(private readonly CurrentClinic $currentClinic) {}
 
-    public function index(Request $request, string $resource): Response
+    public function index(MasterDataIndexRequest $request, string $resource): Response
     {
-        $this->authorizeAccess($request);
         $definition = MasterDataRegistry::get($resource);
-        $modelClass = $definition['model'];
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
 
+        return Inertia::render('master-data/index', [
+            'resource' => $resource,
+            'resources' => fn (): array => MasterDataRegistry::navigation(),
+            'definition' => [
+                'label' => $definition['label'],
+                'singular' => $definition['singular'],
+                'description' => $definition['description'],
+                'columns' => $definition['columns'],
+            ],
+            'records' => fn (): LengthAwarePaginator => $this->records($request, $resource, $search, $status),
+            'form' => function () use ($request, $resource, $definition): ?array {
+                if (! $request->filled('edit') && ! $request->boolean('create')) {
+                    return null;
+                }
+
+                $record = $request->filled('edit')
+                    ? $this->serialize($this->findRecord($resource, $request->string('edit')->toString()), $definition['fields'])
+                    : null;
+
+                return [
+                    'record' => $record,
+                    'fields' => $this->fieldsWithOptions($definition['fields'], $record),
+                ];
+            },
+            'filters' => ['search' => $search, 'status' => $status, 'per_page' => (int) ($request->validated('per_page') ?? 15)],
+        ]);
+    }
+
+    /** @return LengthAwarePaginator<int, array{uuid: string, is_active: bool, columns: array<string, mixed>}> */
+    private function records(MasterDataIndexRequest $request, string $resource, string $search, string $status): LengthAwarePaginator
+    {
+        $definition = MasterDataRegistry::get($resource);
+        $modelClass = $definition['model'];
+        $columns = array_column($definition['columns'], 'key');
+        $selected = array_map(fn (string $column): string => match ($column) {
+            'staff_profile' => 'staff_profile_id',
+            'service_unit' => 'service_unit_id',
+            default => $column,
+        }, $columns);
+
         /** @var Builder<Model> $query */
-        $query = $modelClass::query()->where('clinic_id', $this->currentClinic->id());
+        $query = $modelClass::query()
+            ->select(array_unique(['id', 'uuid', 'is_active', ...$selected]))
+            ->where('clinic_id', $this->currentClinic->id());
 
         if ($search !== '') {
             $query->where(function (Builder $searchQuery) use ($definition, $resource, $search): void {
@@ -59,30 +101,27 @@ class MasterDataController extends Controller
             $query->with('serviceUnit:id,name');
         }
 
-        $records = $query
+        return $query
             ->latest('id')
-            ->paginate(15)
-            ->withQueryString()
-            ->through(fn (Model $record): array => $this->serialize($record, $resource, $definition['fields']));
+            ->paginate((int) ($request->validated('per_page') ?? 15))
+            ->appends($request->safe()->only(['search', 'status', 'per_page']))
+            ->through(function (Model $record) use ($columns): array {
+                $values = [];
 
-        $editing = $request->string('edit')->toString();
-        $editingRecord = $editing === ''
-            ? null
-            : $this->serialize($this->findRecord($resource, $editing), $resource, $definition['fields']);
+                foreach ($columns as $column) {
+                    $values[$column] = match (true) {
+                        $column === 'staff_profile' && $record instanceof Practitioner => $record->staffProfile->name,
+                        $column === 'service_unit' && $record instanceof ClinicService => $record->serviceUnit->name,
+                        default => $record->getAttribute($column),
+                    };
+                }
 
-        return Inertia::render('master-data/index', [
-            'resource' => $resource,
-            'definition' => [
-                'label' => $definition['label'],
-                'singular' => $definition['singular'],
-                'description' => $definition['description'],
-                'fields' => $this->fieldsWithOptions($definition['fields'], $editingRecord),
-                'columns' => $definition['columns'],
-            ],
-            'records' => $records,
-            'editing' => $editingRecord,
-            'filters' => ['search' => $search, 'status' => $status],
-        ]);
+                return [
+                    'uuid' => (string) $record->getAttribute('uuid'),
+                    'is_active' => (bool) $record->getAttribute('is_active'),
+                    'columns' => $values,
+                ];
+            });
     }
 
     public function store(UpsertMasterDataRequest $request, string $resource): RedirectResponse
@@ -104,7 +143,7 @@ class MasterDataController extends Controller
             'message' => ucfirst($definition['singular']).' berhasil ditambahkan.',
         ]);
 
-        return back();
+        return $this->redirectToList($request, $resource);
     }
 
     public function update(UpsertMasterDataRequest $request, string $resource, string $record): RedirectResponse
@@ -128,7 +167,7 @@ class MasterDataController extends Controller
             'message' => ucfirst($definition['singular']).' berhasil diperbarui.',
         ]);
 
-        return to_route('master-data.index', ['resource' => $resource]);
+        return $this->redirectToList($request, $resource);
     }
 
     public function toggle(Request $request, string $resource, string $record): RedirectResponse
@@ -167,6 +206,14 @@ class MasterDataController extends Controller
         abort_unless($request->user()?->hasClinicPermission('master_data.manage') === true, 403);
     }
 
+    private function redirectToList(Request $request, string $resource): RedirectResponse
+    {
+        return to_route('master-data.index', [
+            'resource' => $resource,
+            ...array_intersect_key($request->query(), array_flip(['search', 'status', 'page', 'per_page'])),
+        ]);
+    }
+
     private function findRecord(string $resource, string $uuid): Model
     {
         $modelClass = MasterDataRegistry::get($resource)['model'];
@@ -181,7 +228,7 @@ class MasterDataController extends Controller
      * @param  list<array<string, mixed>>  $fields
      * @return array<string, mixed>
      */
-    private function serialize(Model $record, string $resource, array $fields): array
+    private function serialize(Model $record, array $fields): array
     {
         $values = [];
 
@@ -192,21 +239,10 @@ class MasterDataController extends Controller
                 : $value;
         }
 
-        $columns = $values;
-
-        if ($record instanceof Practitioner) {
-            $columns['staff_profile'] = $record->staffProfile->name;
-        }
-
-        if ($record instanceof ClinicService) {
-            $columns['service_unit'] = $record->serviceUnit->name;
-        }
-
         return [
             'uuid' => (string) $record->getAttribute('uuid'),
             'is_active' => (bool) $record->getAttribute('is_active'),
             'values' => $values,
-            'columns' => $columns,
         ];
     }
 

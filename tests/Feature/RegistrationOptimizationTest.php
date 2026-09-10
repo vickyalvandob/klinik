@@ -5,9 +5,30 @@ use App\Models\Encounter;
 use App\Models\Patient;
 use App\Models\Permission;
 use App\SystemRole;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Testing\AssertableInertia as Assert;
+
+test('registration date defaults to today in the clinic timezone and keeps history and counts on the selected date', function () {
+    config(['app.timezone' => 'UTC']);
+    $this->travelTo(CarbonImmutable::parse('2026-09-09 17:15:00 UTC'));
+    $context = createClinicWorkflow(SystemRole::FrontOffice);
+    $context['clinic']->update(['timezone' => 'Asia/Jakarta']);
+    registerPatient($this, $context)->assertSessionHasNoErrors();
+    $older = Encounter::withoutGlobalScopes()->sole();
+    $older->update(['encounter_date' => '2026-09-09', 'registered_at' => now()->subDay()]);
+    $patient = Patient::factory()->create(['tenant_id' => $context['tenant']->id, 'national_id_number' => null]);
+    registerPatient($this, [...$context, 'patient' => $patient])->assertSessionHasNoErrors();
+    $current = Encounter::withoutGlobalScopes()->latest('id')->firstOrFail();
+
+    $this->get(route('registrations.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('today', '2026-09-10')->where('filters.date', '2026-09-10')
+            ->has('encounters.data', 1)->where('encounters.data.0.uuid', $current->uuid)->where('summary.total', 1));
+    $this->get(route('registrations.index', ['date' => '2026-09-09']))
+        ->assertInertia(fn (Assert $page) => $page->where('filters.date', '2026-09-09')
+            ->has('encounters.data', 1)->where('encounters.data.0.uuid', $older->uuid)->where('summary.total', 1));
+});
 
 test('registration worklist provides the inline form with only current clinic options', function () {
     $context = createClinicWorkflow(SystemRole::FrontOffice);

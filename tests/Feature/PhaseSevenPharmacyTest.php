@@ -19,6 +19,7 @@ use App\StockMovementType;
 use App\Support\Tenancy\CurrentClinic;
 use App\Support\Tenancy\CurrentTenant;
 use App\SystemRole;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -174,8 +175,9 @@ test('pharmacy prioritizes older prescriptions and retains search across paginat
         ->missing('prescriptions.data.0.notes'));
 });
 
-test('pharmacy history filters completion dates in clinic timezone and includes cancellations', function () {
+test('pharmacy history filters completion dates in clinic timezone and includes cancellations', function (bool $useDefaultDate) {
     config()->set('app.timezone', 'UTC');
+    $this->travelTo(CarbonImmutable::parse($useDefaultDate ? '2026-09-07 18:00:00 UTC' : '2026-09-10 10:00:00 UTC'));
     $context = pharmacyPrescription($this, stock: 20, status: PrescriptionStatus::Dispensed);
     $context['clinic']->update(['timezone' => 'Asia/Jakarta']);
     $context['prescription']->update(['prescribed_at' => '2026-09-01 10:00:00', 'dispensed_at' => '2026-09-07 17:00:00']);
@@ -188,15 +190,16 @@ test('pharmacy history filters completion dates in clinic timezone and includes 
         'dispensed_at' => '2026-09-08 17:00:00',
     ]);
 
-    $this->actingAs($context['user'])->get(route('pharmacy.index', ['mode' => 'history', 'date' => '2026-09-08']))
+    $this->actingAs($context['user'])->get(route('pharmacy.index', ['mode' => 'history', ...($useDefaultDate ? [] : ['date' => '2026-09-08'])]))
         ->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('date', '2026-09-08')
+        ->where('today', $useDefaultDate ? '2026-09-08' : '2026-09-10')
         ->where('timezone', 'Asia/Jakarta')
         ->has('prescriptions.data', 2)
         ->where('prescriptions.data.0.uuid', $cancelled->uuid)
         ->where('prescriptions.data.0.cancelled_at', $cancelled->cancelled_at->toIso8601String())
         ->where('prescriptions.data.1.uuid', $context['prescription']->uuid));
-});
+})->with(['default clinic day' => true, 'selected history day' => false]);
 
 test('stock filters include missing stock and distinguish inactive medicines', function (string $filter, int $expectedCount) {
     $context = pharmacyPrescription($this, stock: 5);

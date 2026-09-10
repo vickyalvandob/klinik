@@ -44,6 +44,7 @@ test('invoice is generated once with immutable rupiah price snapshots', function
 
 test('cashier sees billing worklist and detail while pharmacy is forbidden', function () {
     $context = billableEncounter($this);
+    $context['clinic']->update(['timezone' => 'Asia/Makassar']);
 
     $this->actingAs($context['user'])
         ->withSession(['current_clinic_id' => $context['clinic']->id])
@@ -51,6 +52,7 @@ test('cashier sees billing worklist and detail while pharmacy is forbidden', fun
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('billing/index')
+            ->where('timezone', 'Asia/Makassar')
             ->where('summary.outstanding_count', 1)
             ->where('summary.outstanding_amount', 100000)
             ->has('invoices.data', 1)

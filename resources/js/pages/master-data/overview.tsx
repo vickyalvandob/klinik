@@ -1,29 +1,15 @@
 import { Head, Link } from '@inertiajs/react';
-import {
-    ArrowRight,
-    Boxes,
-    BriefcaseMedical,
-    Building2,
-    Pill,
-    Stethoscope,
-    Users,
-} from 'lucide-react';
+import { ArrowRight, Boxes } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { dashboard } from '@/routes';
 import { index, overview } from '@/routes/master-data';
-
-const icons = {
-    staff: Users,
-    practitioners: Stethoscope,
-    'service-units': Building2,
-    services: BriefcaseMedical,
-    medicines: Pill,
-};
+import { resourceIcons } from './resource-navigation';
+import type { Resource } from './types';
 
 export default function MasterDataOverview({
     resources,
 }: {
-    resources: Array<{ key: string; label: string; description: string }>;
+    resources: Resource[];
 }) {
     return (
         <>
@@ -34,20 +20,25 @@ export default function MasterDataOverview({
                     title="Master Data"
                     description="Pilih kelompok data yang ingin dikelola. Seluruh perubahan berlaku untuk klinik aktif."
                 />
-                <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <section
+                    aria-label="Kategori master data"
+                    className="grid gap-3 lg:grid-cols-2"
+                >
                     {resources.map((resource) => {
                         const Icon =
-                            icons[resource.key as keyof typeof icons] ?? Boxes;
+                            resourceIcons[
+                                resource.key as keyof typeof resourceIcons
+                            ] ?? Boxes;
                         return (
                             <Link
                                 key={resource.key}
                                 href={index(resource.key)}
-                                className="bg-card hover:border-primary/50 focus-visible:ring-ring grid min-h-40 gap-4 rounded-xl border p-5 transition-colors outline-none focus-visible:ring-2"
+                                className="group bg-card hover:border-primary/40 hover:bg-muted/20 focus-visible:ring-ring flex items-start gap-4 rounded-xl border p-5 transition-colors outline-none focus-visible:ring-2"
                             >
-                                <div className="bg-muted text-foreground grid size-10 place-items-center rounded-lg">
+                                <div className="bg-muted text-foreground grid size-10 shrink-0 place-items-center rounded-lg">
                                     <Icon className="size-5" />
                                 </div>
-                                <div>
+                                <div className="min-w-0 flex-1">
                                     <h2 className="font-semibold">
                                         {resource.label}
                                     </h2>
@@ -55,8 +46,9 @@ export default function MasterDataOverview({
                                         {resource.description}
                                     </p>
                                 </div>
-                                <span className="text-primary mt-auto inline-flex items-center gap-2 text-sm font-medium">
-                                    Buka data <ArrowRight className="size-4" />
+                                <span className="text-muted-foreground group-hover:text-primary mt-2 shrink-0">
+                                    <ArrowRight className="size-4" />
+                                    <span className="sr-only">Buka data</span>
                                 </span>
                             </Link>
                         );

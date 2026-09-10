@@ -108,15 +108,15 @@ final class MasterDataRegistry
                     ['key' => 'code', 'label' => 'Kode layanan', 'type' => 'text', 'required' => true, 'placeholder' => 'KONS-UMUM'],
                     ['key' => 'name', 'label' => 'Nama layanan', 'type' => 'text', 'required' => true],
                     ['key' => 'description', 'label' => 'Deskripsi', 'type' => 'textarea', 'required' => false],
-                    ['key' => 'price', 'label' => 'Tarif', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 500],
-                    ['key' => 'duration_minutes', 'label' => 'Durasi (menit)', 'type' => 'number', 'required' => true, 'min' => 5, 'step' => 5],
+                    ['key' => 'price', 'label' => 'Tarif', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 0.01],
+                    ['key' => 'duration_minutes', 'label' => 'Durasi (menit)', 'type' => 'number', 'required' => true, 'min' => 5, 'step' => 1],
                 ],
             ],
             'medicines' => [
                 'model' => Medicine::class,
                 'label' => 'Obat',
                 'singular' => 'obat',
-                'description' => 'Katalog obat untuk resep, farmasi, dan pengendalian stok pada fase berikutnya.',
+                'description' => 'Katalog obat, satuan, dan harga untuk resep serta pelayanan farmasi.',
                 'search' => ['code', 'name', 'generic_name', 'category'],
                 'columns' => [
                     ['key' => 'code', 'label' => 'Kode'],
@@ -133,12 +133,24 @@ final class MasterDataRegistry
                     ['key' => 'dosage_form', 'label' => 'Bentuk sediaan', 'type' => 'text', 'required' => true, 'placeholder' => 'Tablet'],
                     ['key' => 'strength', 'label' => 'Kekuatan', 'type' => 'text', 'required' => false, 'placeholder' => '500 mg'],
                     ['key' => 'unit', 'label' => 'Satuan', 'type' => 'text', 'required' => true, 'placeholder' => 'tablet'],
-                    ['key' => 'purchase_price', 'label' => 'Harga beli', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 100],
-                    ['key' => 'selling_price', 'label' => 'Harga jual', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 100],
+                    ['key' => 'purchase_price', 'label' => 'Harga beli', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 0.01],
+                    ['key' => 'selling_price', 'label' => 'Harga jual', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 0.01],
                     ['key' => 'minimum_stock', 'label' => 'Stok minimum', 'type' => 'number', 'required' => true, 'min' => 0, 'step' => 1],
                 ],
             ],
         ];
+    }
+
+    /** @return list<array{key: string, label: string, description: string}> */
+    public static function navigation(): array
+    {
+        return array_values(collect(self::all())
+            ->map(fn (array $definition, string $key): array => [
+                'key' => $key,
+                'label' => $definition['label'],
+                'description' => $definition['description'],
+            ])
+            ->all());
     }
 
     /** @return MasterDefinition */

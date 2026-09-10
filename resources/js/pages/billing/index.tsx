@@ -1,20 +1,13 @@
-import { Head, Link, router } from '@inertiajs/react';
-import {
-    ArrowRight,
-    CheckCheck,
-    Clock3,
-    LoaderCircle,
-    ReceiptText,
-    Search,
-    X,
-} from 'lucide-react';
-import { useState } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowRight, ReceiptText, Search, X } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { PaginationLinks } from '@/components/pagination-links';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
-import { formatCurrency, formatDateTime, invoiceTone } from '@/lib/billing';
+import { formatCurrency, invoiceTone } from '@/lib/billing';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { index, show } from '@/routes/billing';
@@ -34,95 +27,80 @@ export default function BillingIndex({
     search,
     invoices,
     summary,
+    timezone,
 }: {
     mode: BillingMode;
     search: string;
     invoices: BillingInvoicePage;
     summary: Summary;
+    timezone: string;
 }) {
-    const [loading, setLoading] = useState(false);
+    const searchForm = useForm({ search });
+    const { setData } = searchForm;
+    useEffect(() => setData('search', search), [mode, search, setData]);
+    const loading = searchForm.processing;
+    const dateFormat = useMemo(
+        () =>
+            new Intl.DateTimeFormat('id-ID', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+                timeZone: timezone,
+            }),
+        [timezone],
+    );
     const active = mode === 'outstanding' || mode === 'partial';
     const tabs: Array<[BillingMode, string, number]> = [
-        ['outstanding', 'Belum dibayar', summary.issued_count],
+        ['outstanding', 'Belum bayar', summary.issued_count],
         ['partial', 'Sebagian', summary.partial_count],
         ['paid', 'Lunas', summary.paid_count],
         ['voided', 'Dibatalkan', summary.voided_count],
     ];
 
     function filter(nextMode: BillingMode, nextSearch: string) {
-        router.get(
-            index.url(),
-            { mode: nextMode, search: nextSearch.trim() },
-            {
-                only: ['invoices', 'mode', 'search', 'summary'],
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                onStart: () => setLoading(true),
-                onFinish: () => setLoading(false),
-            },
-        );
+        searchForm.transform(() => ({
+            mode: nextMode,
+            search: nextSearch.trim(),
+        }));
+        searchForm.get(index.url(), {
+            only:
+                nextMode === mode
+                    ? ['invoices', 'mode', 'search']
+                    : ['invoices', 'mode', 'search', 'summary'],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
     }
 
     return (
         <>
             <Head title="Kasir" />
-            <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 md:p-6">
+            <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-1 flex-col gap-5 p-4 md:p-6">
                 <PageHeader
                     eyebrow="Pembayaran pasien"
                     title="Kasir"
                     description="Kelola tagihan dan pembayaran dalam satu tempat."
                 />
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <div className="bg-card col-span-2 rounded-xl border p-4 sm:col-span-1">
-                        <p className="text-muted-foreground flex items-center gap-2 text-xs">
-                            <ReceiptText className="size-4" /> Sisa tagihan
-                            aktif
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">
-                            {formatCurrency(summary.outstanding_amount)}
-                        </p>
-                        <p className="text-muted-foreground mt-1 text-xs">
-                            {summary.outstanding_count} tagihan belum selesai
-                        </p>
-                    </div>
-                    <div className="bg-card rounded-xl border p-4">
-                        <p className="text-muted-foreground flex items-center gap-2 text-xs">
-                            <Clock3 className="size-4" /> Perlu pelunasan
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold tabular-nums">
-                            {summary.partial_count}
-                            <span className="text-muted-foreground ml-2 text-sm font-normal">
-                                tagihan
-                            </span>
-                        </p>
-                        <p className="text-muted-foreground mt-1 text-xs">
-                            Sudah dibayar sebagian
-                        </p>
-                    </div>
-                    <div className="bg-card rounded-xl border p-4">
-                        <p className="text-muted-foreground flex items-center gap-2 text-xs">
-                            <CheckCheck className="size-4" /> Tagihan lunas
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold tabular-nums">
-                            {summary.paid_count}
-                            <span className="text-muted-foreground ml-2 text-sm font-normal">
-                                tagihan
-                            </span>
-                        </p>
-                        <p className="text-muted-foreground mt-1 text-xs">
-                            Seluruh riwayat klinik
-                        </p>
-                    </div>
-                </div>
-
                 <section
                     className="bg-card min-w-0 overflow-hidden rounded-xl border"
                     aria-busy={loading}
                 >
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+                        <div>
+                            <p className="text-muted-foreground text-xs">
+                                Sisa tagihan aktif
+                            </p>
+                            <p className="mt-1 text-xl font-semibold tracking-tight tabular-nums">
+                                {formatCurrency(summary.outstanding_amount)}
+                            </p>
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                            {summary.outstanding_count} tagihan belum selesai
+                        </p>
+                    </div>
                     <div className="border-b">
                         <nav
-                            className="flex overflow-x-auto px-2"
+                            className="grid grid-cols-4 px-2 lg:flex"
                             aria-label="Status tagihan"
                         >
                             {tabs.map(([value, label, count]) => (
@@ -135,13 +113,15 @@ export default function BillingIndex({
                                     }
                                     onClick={() => filter(value, search)}
                                     className={cn(
-                                        'focus-visible:ring-ring flex shrink-0 items-center gap-2 border-b-2 px-3 py-3.5 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60',
+                                        'focus-visible:ring-ring flex min-w-0 flex-col items-center justify-center gap-1.5 border-b-2 px-1 py-3 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60 lg:flex-row lg:gap-2 lg:px-4 lg:text-sm',
                                         mode === value
                                             ? 'border-primary text-primary font-semibold'
                                             : 'text-muted-foreground hover:text-foreground border-transparent',
                                     )}
                                 >
-                                    {label}
+                                    <span className="flex min-h-8 items-center justify-center lg:min-h-0">
+                                        {label}
+                                    </span>
                                     <span className="bg-muted text-muted-foreground rounded-md px-1.5 py-0.5 text-xs tabular-nums">
                                         {count}
                                     </span>
@@ -149,29 +129,38 @@ export default function BillingIndex({
                             ))}
                         </nav>
                     </div>
-                    <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <form
-                            className="flex min-w-0 flex-1 gap-2 sm:max-w-lg"
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                const value = new FormData(
-                                    event.currentTarget,
-                                ).get('search');
-                                filter(
-                                    mode,
-                                    typeof value === 'string' ? value : '',
-                                );
-                            }}
-                        >
+                    <form
+                        aria-label="Filter tagihan"
+                        className="space-y-2 border-b p-4"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            filter(mode, searchForm.data.search);
+                        }}
+                    >
+                        <div className="flex min-w-0 items-center gap-2">
                             <div className="relative min-w-0 flex-1">
                                 <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                                 <Input
-                                    key={search}
+                                    type="search"
                                     name="search"
-                                    defaultValue={search}
+                                    value={searchForm.data.search}
+                                    onChange={(event) =>
+                                        searchForm.setData(
+                                            'search',
+                                            event.target.value,
+                                        )
+                                    }
                                     maxLength={100}
                                     aria-label="Cari tagihan"
-                                    placeholder="Nama pasien, no. RM, atau tagihan"
+                                    aria-invalid={Boolean(
+                                        searchForm.errors.search,
+                                    )}
+                                    aria-describedby={
+                                        searchForm.errors.search
+                                            ? 'billing-search-error'
+                                            : undefined
+                                    }
+                                    placeholder="Cari pasien, RM, atau tagihan"
                                     className="pl-9"
                                 />
                             </div>
@@ -180,11 +169,7 @@ export default function BillingIndex({
                                 variant="outline"
                                 disabled={loading}
                             >
-                                {loading ? (
-                                    <LoaderCircle className="size-4 animate-spin" />
-                                ) : (
-                                    'Cari'
-                                )}
+                                {loading ? <Spinner /> : <Search />} Cari
                             </Button>
                             {search && (
                                 <Button
@@ -198,13 +183,39 @@ export default function BillingIndex({
                                     <X />
                                 </Button>
                             )}
-                        </form>
-                        <p className="text-muted-foreground text-xs">
+                        </div>
+                        {searchForm.errors.search && (
+                            <p
+                                id="billing-search-error"
+                                role="alert"
+                                className="text-destructive text-xs"
+                            >
+                                {searchForm.errors.search}
+                            </p>
+                        )}
+                    </form>
+                    <div className="text-muted-foreground flex items-center justify-between gap-3 border-b px-4 py-3 text-xs">
+                        <h2 className="text-foreground font-medium">
+                            {invoices.total} tagihan
+                        </h2>
+                        <span>
                             {active
-                                ? 'Paling lama menunggu ditampilkan dahulu'
-                                : 'Tagihan terbaru ditampilkan dahulu'}
-                        </p>
+                                ? 'Terlama lebih dahulu'
+                                : 'Riwayat terbaru'}
+                        </span>
                     </div>
+                    {invoices.data.length > 0 && (
+                        <div
+                            aria-hidden="true"
+                            className="bg-muted/30 text-muted-foreground hidden grid-cols-[minmax(0,1fr)_11rem_8rem] gap-5 border-b px-4 py-3 text-xs lg:grid"
+                        >
+                            <span>Pasien / tagihan</span>
+                            <span className="text-right">
+                                {active ? 'Sisa tagihan' : 'Total tagihan'}
+                            </span>
+                            <span className="text-right">Aksi</span>
+                        </div>
+                    )}
                     {invoices.data.length === 0 ? (
                         <div className="grid justify-items-center gap-2 px-5 py-14 text-center">
                             <span className="bg-muted mb-1 rounded-full p-3">
@@ -213,11 +224,11 @@ export default function BillingIndex({
                             <h2 className="text-sm font-semibold">
                                 {search
                                     ? 'Tagihan tidak ditemukan'
-                                    : 'Belum ada tagihan pada daftar ini'}
+                                    : 'Belum ada tagihan'}
                             </h2>
                             <p className="text-muted-foreground max-w-sm text-sm">
                                 {search
-                                    ? 'Coba nama pasien, nomor rekam medis, registrasi, atau nomor tagihan lainnya.'
+                                    ? 'Coba kata kunci lain atau hapus pencarian.'
                                     : 'Tagihan akan tersedia setelah pelayanan pasien selesai.'}
                             </p>
                             {search && (
@@ -241,11 +252,11 @@ export default function BillingIndex({
                             {invoices.data.map((invoice) => (
                                 <article
                                     key={invoice.uuid}
-                                    className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_12rem_auto] md:items-center md:px-5"
+                                    className="hover:bg-muted/25 grid gap-3 p-4 transition-colors lg:grid-cols-[minmax(0,1fr)_11rem_8rem] lg:items-center lg:gap-5"
                                 >
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <h2 className="font-semibold break-words">
+                                            <h2 className="text-sm font-semibold break-words">
                                                 {invoice.patient.name}
                                             </h2>
                                             <Badge
@@ -265,17 +276,19 @@ export default function BillingIndex({
                                             · {invoice.invoice_number}
                                         </p>
                                         <p className="text-muted-foreground mt-1 text-xs">
-                                            {formatDateTime(invoice.issued_at)}{' '}
+                                            {dateFormat.format(
+                                                new Date(invoice.issued_at),
+                                            )}{' '}
                                             · {invoice.registration_number}
                                         </p>
                                     </div>
-                                    <div className="flex items-center justify-between gap-3 md:block md:text-right">
-                                        <p className="text-muted-foreground text-xs">
+                                    <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-3 gap-y-1 lg:block lg:text-right">
+                                        <p className="text-muted-foreground text-xs lg:sr-only">
                                             {active
                                                 ? 'Sisa tagihan'
                                                 : 'Total tagihan'}
                                         </p>
-                                        <p className="text-base font-semibold tabular-nums md:mt-1">
+                                        <p className="text-sm font-semibold tabular-nums">
                                             {formatCurrency(
                                                 active
                                                     ? invoice.balance_due
@@ -283,7 +296,7 @@ export default function BillingIndex({
                                             )}
                                         </p>
                                         {invoice.paid_amount > 0 && active && (
-                                            <p className="text-muted-foreground hidden text-xs md:block">
+                                            <p className="text-muted-foreground col-span-2 text-right text-xs lg:mt-1">
                                                 Dibayar{' '}
                                                 {formatCurrency(
                                                     invoice.paid_amount,
@@ -295,6 +308,7 @@ export default function BillingIndex({
                                         asChild
                                         variant={active ? 'default' : 'outline'}
                                         size="sm"
+                                        className="h-9 justify-self-start lg:justify-self-end"
                                     >
                                         <Link
                                             href={show(invoice.uuid)}

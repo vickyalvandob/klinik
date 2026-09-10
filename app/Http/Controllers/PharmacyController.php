@@ -30,7 +30,8 @@ class PharmacyController extends Controller
             default => 'new',
         };
         $search = $request->string('search')->trim()->toString();
-        $date = $mode === 'history' ? $request->string('date')->toString() : '';
+        $today = now($this->currentClinic->get()->timezone)->toDateString();
+        $date = $mode === 'history' ? ($request->validated('date') ?? $today) : '';
         $stockStatus = $request->string('stock_status', 'all')->toString() ?: 'all';
         $prescriptions = null;
         $stocks = null;
@@ -139,6 +140,7 @@ class PharmacyController extends Controller
             'mode' => $mode,
             'search' => $search,
             'date' => $date,
+            'today' => $today,
             'stockStatus' => $stockStatus,
             'timezone' => $this->currentClinic->get()->timezone,
             'can' => ['adjust_stock' => Gate::allows('adjustStock', Prescription::class)],
