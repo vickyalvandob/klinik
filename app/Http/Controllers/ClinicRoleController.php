@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\EnsureClinicRoles;
 use App\Http\Requests\UpdateClinicRoleRequest;
+use App\Models\ClinicMembership;
 use App\Models\ClinicRole;
 use App\Models\Permission;
 use App\Support\Tenancy\CurrentClinic;
@@ -29,7 +30,8 @@ class ClinicRoleController extends Controller
         $roleOrder = array_flip(array_column(SystemRole::cases(), 'value'));
         $roles = ClinicRole::query()
             ->where('clinic_id', $this->currentClinic->id())
-            ->with(['role:id,code,name,description', 'permissions:id,key'])
+            ->with('role:id,code,name,description')
+            ->withCount('permissions')
             ->get()
             ->sortBy(fn (ClinicRole $clinicRole): int => $roleOrder[$clinicRole->role->code] ?? 999)
             ->values();
@@ -42,23 +44,30 @@ class ClinicRoleController extends Controller
         abort_if($selected === null, 404);
 
         return Inertia::render('clinic-roles/index', [
-            'roles' => $roles->map(fn (ClinicRole $clinicRole): array => [
-                'uuid' => $clinicRole->uuid,
-                'code' => $clinicRole->role->code,
-                'name' => $clinicRole->role->name,
-                'description' => $clinicRole->role->description,
-                'permission_count' => $clinicRole->permissions->count(),
-                'editable' => $clinicRole->role->code !== SystemRole::OwnerAdmin->value,
-            ]),
-            'selectedRole' => [
+            'roles' => function () use ($roles): array {
+                $memberCounts = ClinicMembership::query()->where('clinic_id', $this->currentClinic->id())
+                    ->where('is_active', true)->selectRaw('role_id, COUNT(*) as total')
+                    ->groupBy('role_id')->pluck('total', 'role_id');
+
+                return $roles->map(fn (ClinicRole $clinicRole): array => [
+                    'uuid' => $clinicRole->uuid,
+                    'code' => $clinicRole->role->code,
+                    'name' => $clinicRole->role->name,
+                    'description' => $clinicRole->role->description,
+                    'permission_count' => (int) $clinicRole->permissions_count,
+                    'member_count' => (int) ($memberCounts[$clinicRole->role_id] ?? 0),
+                    'editable' => $clinicRole->role->code !== SystemRole::OwnerAdmin->value,
+                ])->all();
+            },
+            'selectedRole' => fn () => [
                 'uuid' => $selected->uuid,
                 'code' => $selected->role->code,
                 'name' => $selected->role->name,
                 'description' => $selected->role->description,
-                'permissions' => $selected->permissions->pluck('key')->values()->all(),
+                'permissions' => $selected->loadMissing('permissions:id,key')->permissions->pluck('key')->values()->all(),
                 'editable' => $selected->role->code !== SystemRole::OwnerAdmin->value,
             ],
-            'permissionGroups' => Permission::query()
+            'permissionGroups' => fn () => Permission::query()
                 ->orderBy('group')
                 ->orderBy('name')
                 ->get(['key', 'name', 'group'])

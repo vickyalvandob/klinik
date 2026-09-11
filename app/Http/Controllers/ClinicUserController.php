@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\IndexClinicUserRequest;
 use App\Http\Requests\StoreClinicUserRequest;
 use App\Http\Requests\UpdateClinicUserRequest;
 use App\Models\ClinicMembership;
@@ -14,7 +15,6 @@ use App\Support\Tenancy\CurrentClinic;
 use App\SystemRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -27,11 +27,12 @@ class ClinicUserController extends Controller
         private readonly CurrentClinic $currentClinic,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(IndexClinicUserRequest $request): Response
     {
         Gate::authorize('viewAny', ClinicMembership::class);
         $search = $request->string('search')->trim()->toString();
         $status = $request->string('status')->toString();
+        $roleCode = $request->string('role')->toString();
 
         $query = ClinicMembership::query()
             ->where('clinic_id', $this->currentClinic->id())
@@ -39,8 +40,8 @@ class ClinicUserController extends Controller
                 'user:id,uuid,name,email,last_login_at',
                 'role:id,code,name',
                 'staffProfile:id,uuid,name',
-                'permissions:id,key',
-            ]);
+            ])
+            ->withCount('permissions');
 
         if ($search !== '') {
             $query->whereHas('user', function (Builder $userQuery) use ($search): void {
@@ -55,35 +56,48 @@ class ClinicUserController extends Controller
             $query->where('is_active', $status === 'active');
         }
 
-        $memberships = $query
-            ->latest('id')
-            ->paginate(15)
-            ->withQueryString()
-            ->through(fn (ClinicMembership $membership): array => $this->membershipData($membership));
+        if ($roleCode !== '') {
+            $query->whereHas('role', fn (Builder $query) => $query->where('code', $roleCode));
+        }
 
         $editingUuid = $request->string('edit')->toString();
         $editing = $editingUuid === ''
             ? null
-            : $this->membershipData($this->findMembership($editingUuid)->load(['user', 'role', 'staffProfile', 'permissions']));
-
-        $clinicRoles = ClinicRole::query()->where('clinic_id', $this->currentClinic->id())
-            ->with('permissions:id,key')->get()->keyBy('role_id');
-        $roleOrder = array_flip(array_column(SystemRole::cases(), 'value'));
+            : $this->membershipData($this->findMembership($editingUuid)->load([
+                'user:id,uuid,name,email,last_login_at', 'role:id,code,name',
+                'staffProfile:id,name', 'permissions:id,key',
+            ]), true);
+        $formOpen = $editing !== null || $request->boolean('create');
 
         return Inertia::render('clinic-users/index', [
-            'memberships' => $memberships,
+            'memberships' => fn () => $query->latest('id')->paginate(15)
+                ->appends($request->only(['search', 'status', 'role']))
+                ->through(fn (ClinicMembership $membership): array => $this->membershipData($membership)),
+            'summary' => function (): array {
+                $counts = ClinicMembership::query()->where('clinic_id', $this->currentClinic->id())
+                    ->selectRaw('is_active, COUNT(*) as total')->groupBy('is_active')->pluck('total', 'is_active');
+
+                return ['total' => (int) $counts->sum(), 'active' => (int) ($counts[1] ?? 0), 'inactive' => (int) ($counts[0] ?? 0)];
+            },
             'editing' => $editing,
-            'filters' => ['search' => $search, 'status' => $status],
-            'roles' => Role::query()
-                ->whereIn('code', array_column(SystemRole::cases(), 'value'))
-                ->with('permissions:id,key')
-                ->get(['id', 'code', 'name', 'description'])
-                ->sortBy(fn (Role $role): int => $roleOrder[$role->code])->values()
-                ->map(fn (Role $role): array => [
-                    'id' => $role->id, 'code' => $role->code, 'name' => $role->name, 'description' => $role->description,
-                    'permissions' => ($clinicRoles->get($role->id)->permissions ?? $role->permissions)->pluck('key')->values()->all(),
-                ]),
-            'staff' => StaffProfile::query()
+            'formOpen' => $formOpen,
+            'filters' => ['search' => $search, 'status' => $status, 'role' => $roleCode],
+            'roles' => function (): array {
+                $clinicRoles = ClinicRole::query()->where('clinic_id', $this->currentClinic->id())
+                    ->with('permissions:id,key')->get()->keyBy('role_id');
+                $roleOrder = array_flip(array_column(SystemRole::cases(), 'value'));
+
+                return Role::query()
+                    ->whereIn('code', array_column(SystemRole::cases(), 'value'))
+                    ->with('permissions:id,key')
+                    ->get(['id', 'code', 'name', 'description'])
+                    ->sortBy(fn (Role $role): int => $roleOrder[$role->code])->values()
+                    ->map(fn (Role $role): array => [
+                        'id' => $role->id, 'code' => $role->code, 'name' => $role->name, 'description' => $role->description,
+                        'permissions' => ($clinicRoles->get($role->id)->permissions ?? $role->permissions)->pluck('key')->values()->all(),
+                    ])->all();
+            },
+            'staff' => fn () => ! $formOpen ? [] : StaffProfile::query()
                 ->where('clinic_id', $this->currentClinic->id())
                 ->where(function (Builder $query) use ($editing): void {
                     $query->where('is_active', true);
@@ -101,7 +115,7 @@ class ClinicUserController extends Controller
                 })
                 ->orderBy('name')
                 ->get(['id', 'uuid', 'name']),
-            'permissions' => Permission::query()
+            'permissions' => fn () => ! $formOpen || ! $request->user()?->hasClinicPermission('roles.manage') ? (object) [] : Permission::query()
                 ->orderBy('group')
                 ->orderBy('name')
                 ->get(['key', 'name', 'group'])
@@ -154,7 +168,9 @@ class ClinicUserController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($membership, $validated): void {
+        $canManageRoles = $request->user()?->hasClinicPermission('roles.manage') === true;
+
+        DB::transaction(function () use ($membership, $validated, $canManageRoles): void {
             $lockedMembership = ClinicMembership::query()->whereKey($membership->id)->lockForUpdate()->firstOrFail();
             $this->lockStaffProfile($validated['staff_profile_id'] ?? null);
             $lockedMembership->update([
@@ -162,7 +178,9 @@ class ClinicUserController extends Controller
                 'role_id' => $validated['role_id'],
                 'is_active' => $validated['is_active'],
             ]);
-            $this->syncPermissions($lockedMembership, $validated['permissions'] ?? []);
+            if ($canManageRoles && array_key_exists('permissions', $validated)) {
+                $this->syncPermissions($lockedMembership, $validated['permissions']);
+            }
         });
 
         Inertia::flash('toast', [
@@ -202,7 +220,7 @@ class ClinicUserController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function membershipData(ClinicMembership $membership): array
+    private function membershipData(ClinicMembership $membership, bool $includePermissions = false): array
     {
         return [
             'uuid' => $membership->uuid,
@@ -217,7 +235,8 @@ class ClinicUserController extends Controller
             'staff_profile_id' => $membership->staff_profile_id,
             'staff_name' => $membership->staffProfile?->name,
             'is_active' => $membership->is_active,
-            'permissions' => $membership->permissions->pluck('key')->values()->all(),
+            'permission_count' => $includePermissions ? $membership->permissions->count() : $membership->permissions_count,
+            ...($includePermissions ? ['permissions' => $membership->permissions->pluck('key')->values()->all()] : []),
             'is_self' => $membership->user_id === auth()->id(),
         ];
     }

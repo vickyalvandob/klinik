@@ -66,4 +66,23 @@ class StoreClinicUserRequest extends FormRequest
             'permissions' => 'izin tambahan',
         ];
     }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'Masukkan nama lengkap pengguna.',
+            'email.required' => 'Masukkan email untuk login.',
+            'email.email' => 'Masukkan alamat email yang valid.',
+            'email.unique' => 'Email ini sudah digunakan. Gunakan email lain.',
+            'password.required' => 'Masukkan kata sandi untuk akun baru.',
+            'password.confirmed' => 'Konfirmasi kata sandi belum sama.',
+            'role_id.required' => 'Pilih peran pengguna terlebih dahulu.',
+            'role_id.exists' => 'Peran tidak tersedia. Muat ulang halaman dan pilih kembali.',
+            'staff_profile_id.unique' => 'Profil staf ini sudah terhubung dengan pengguna lain.',
+            'staff_profile_id.exists' => 'Profil staf tidak tersedia di klinik ini.',
+            'permissions.prohibited' => 'Hanya pengelola peran yang dapat mengubah izin tambahan.',
+            'permissions.*.exists' => 'Izin tambahan tidak dikenali. Muat ulang halaman dan pilih kembali.',
+        ];
+    }
 }

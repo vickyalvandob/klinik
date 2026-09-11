@@ -1,25 +1,22 @@
-import { Form, Head, Link } from '@inertiajs/react';
+﻿import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Pencil, Plus, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { useState } from 'react';
 import {
-    KeyRound,
-    Pencil,
-    Plus,
-    Save,
-    Search,
-    UserRoundCog,
-    Users,
-    X,
-} from 'lucide-react';
+    ClinicUserForm,
+    accessSelectClassName,
+    type ClinicUser,
+    type ClinicUserRole,
+    type ClinicUserStaff,
+} from '@/components/clinic-user-form';
 import { EmptyState } from '@/components/empty-state';
-import { FormField } from '@/components/form-field';
 import { PageHeader } from '@/components/page-header';
 import {
     PaginationLinks,
     type PaginationLink,
 } from '@/components/pagination-links';
+import type { PermissionGroups } from '@/components/permission-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -30,562 +27,459 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { index, store, update } from '@/routes/clinic-users';
 import { dashboard } from '@/routes';
-import { operationalNavigation } from '@/lib/operational-navigation';
+import { index as rolesIndex } from '@/routes/clinic-roles';
+import { index } from '@/routes/clinic-users';
 
-type Membership = {
-    uuid: string;
-    user: {
-        uuid: string;
-        name: string;
-        email: string;
-        last_login_at: string | null;
-    };
-    role_id: number;
-    role: { code: string; name: string };
-    staff_profile_id: number | null;
-    staff_name: string | null;
-    is_active: boolean;
-    permissions: string[];
-    is_self: boolean;
-};
+type Filters = { search: string; status: string; role: string };
 type Pagination = {
-    data: Membership[];
+    data: ClinicUser[];
     links: PaginationLink[];
     from: number | null;
     to: number | null;
     total: number;
+    current_page: number;
 };
-type Role = {
-    id: number;
-    code: string;
-    name: string;
-    description: string;
-    permissions: string[];
-};
-type Staff = { id: number; uuid: string; name: string };
-type Permission = { key: string; name: string; group: string };
+const listProps = ['memberships', 'filters'];
+const formProps = ['editing', 'formOpen', 'staff', 'permissions', 'roles'];
+const loginDateFormat = new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+});
 
 export default function ClinicUsersIndex({
     memberships,
     editing,
+    formOpen,
     filters,
+    summary,
     roles,
     staff,
     permissions,
     canManageRoles,
 }: {
     memberships: Pagination;
-    editing: Membership | null;
-    filters: { search: string; status: string };
-    roles: Role[];
-    staff: Staff[];
-    permissions: Record<string, Permission[]>;
+    editing: ClinicUser | null;
+    formOpen: boolean;
+    filters: Filters;
+    summary: { total: number; active: number; inactive: number };
+    roles: ClinicUserRole[];
+    staff: ClinicUserStaff[];
+    permissions: PermissionGroups;
     canManageRoles: boolean;
 }) {
-    const formRoute = editing ? update.form(editing.uuid) : store.form();
+    const [opening, setOpening] = useState(false);
+    const query = { ...filters, page: memberships.current_page };
+    const filtered = Boolean(filters.search || filters.status || filters.role);
+    function closeForm(saved = false) {
+        router.get(
+            index.url({ query }),
+            {},
+            {
+                only: saved
+                    ? [...listProps, ...formProps, 'summary']
+                    : ['editing', 'formOpen'],
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+            },
+        );
+    }
+    const formVisit = {
+        only: formProps,
+        preserveState: true,
+        preserveScroll: true,
+        onStart: () => setOpening(true),
+        onFinish: () => setOpening(false),
+    };
+    function editLink(user: ClinicUser) {
+        return (
+            <Button asChild variant="ghost" size="sm">
+                <Link
+                    href={index({ query: { ...query, edit: user.uuid } })}
+                    {...formVisit}
+                    aria-label={`Edit akses ${user.user.name}`}
+                >
+                    <Pencil />
+                    <span className="hidden xl:inline">Edit akses</span>
+                </Link>
+            </Button>
+        );
+    }
 
     return (
         <>
             <Head title="Pengguna & Akses" />
-            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+            <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 md:p-6">
                 <PageHeader
                     eyebrow="Pengelolaan"
                     title="Pengguna & Akses"
-                    description="Buat akun login, hubungkan profil staf, dan tentukan aksesnya di klinik aktif."
+                    description="Kelola akun tim dan aksesnya di klinik ini."
                     actions={
-                        !editing ? (
-                            <Button asChild>
-                                <Link href={index({ query: { create: 1 } })}>
-                                    <Plus /> Tambah Pengguna
+                        <>
+                            {canManageRoles && (
+                                <Button asChild variant="outline">
+                                    <Link href={rolesIndex()}>
+                                        <ShieldCheck />
+                                        Peran & Hak Akses
+                                    </Link>
+                                </Button>
+                            )}
+                            <Button asChild disabled={opening}>
+                                <Link
+                                    href={index({
+                                        query: { ...query, create: 1 },
+                                    })}
+                                    {...formVisit}
+                                >
+                                    {opening ? <Spinner /> : <Plus />}Tambah
+                                    pengguna
                                 </Link>
                             </Button>
-                        ) : undefined
+                        </>
                     }
                 />
-                <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_25rem]">
-                    <Card className="min-w-0">
-                        <CardContent className="grid gap-4 p-4">
-                            <Form
-                                {...index.form()}
-                                className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]"
-                            >
-                                <div className="relative">
-                                    <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                                    <Input
-                                        name="search"
-                                        defaultValue={filters.search}
-                                        className="pl-9"
-                                        placeholder="Cari nama atau email..."
-                                    />
-                                </div>
-                                <select
-                                    name="status"
-                                    defaultValue={filters.status}
-                                    className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-                                >
-                                    <option value="">Semua status</option>
-                                    <option value="active">Aktif</option>
-                                    <option value="inactive">Nonaktif</option>
-                                </select>
-                                <Button type="submit" variant="outline">
-                                    Terapkan
-                                </Button>
-                            </Form>
-                            {memberships.data.length === 0 ? (
-                                <EmptyState
-                                    icon={Users}
-                                    title="Belum ada pengguna"
-                                    description="Tambahkan akun agar tim dapat masuk sesuai perannya."
-                                    className="border-0"
-                                />
-                            ) : (
-                                <>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Pengguna</TableHead>
-                                                <TableHead>Peran</TableHead>
-                                                <TableHead>
-                                                    Profil staf
-                                                </TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="text-right">
-                                                    Aksi
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {memberships.data.map(
-                                                (membership) => (
-                                                    <TableRow
-                                                        key={membership.uuid}
-                                                    >
-                                                        <TableCell>
-                                                            <p className="font-medium">
-                                                                {
-                                                                    membership
-                                                                        .user
-                                                                        .name
-                                                                }
-                                                                {membership.is_self && (
-                                                                    <span className="text-primary ml-1 text-xs">
-                                                                        (Anda)
-                                                                    </span>
-                                                                )}
-                                                            </p>
-                                                            <p className="text-muted-foreground text-xs">
-                                                                {
-                                                                    membership
-                                                                        .user
-                                                                        .email
-                                                                }
-                                                            </p>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {
-                                                                membership.role
-                                                                    .name
-                                                            }
-                                                            {membership
-                                                                .permissions
-                                                                .length > 0 && (
-                                                                <p className="text-muted-foreground text-xs">
-                                                                    +
-                                                                    {
-                                                                        membership
-                                                                            .permissions
-                                                                            .length
-                                                                    }{' '}
-                                                                    izin
-                                                                </p>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {membership.staff_name ?? (
-                                                                <span className="text-muted-foreground">
-                                                                    Belum
-                                                                    terhubung
-                                                                </span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge
-                                                                variant={
-                                                                    membership.is_active
-                                                                        ? 'default'
-                                                                        : 'secondary'
-                                                                }
-                                                            >
-                                                                {membership.is_active
-                                                                    ? 'Aktif'
-                                                                    : 'Nonaktif'}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Button
-                                                                asChild
-                                                                size="sm"
-                                                                variant="ghost"
-                                                            >
-                                                                <Link
-                                                                    href={index(
-                                                                        {
-                                                                            query: {
-                                                                                edit: membership.uuid,
-                                                                                search:
-                                                                                    filters.search ||
-                                                                                    undefined,
-                                                                                status:
-                                                                                    filters.status ||
-                                                                                    undefined,
-                                                                            },
-                                                                        },
-                                                                    )}
-                                                                >
-                                                                    <Pencil />
-                                                                    <span className="sr-only">
-                                                                        Edit{' '}
-                                                                        {
-                                                                            membership
-                                                                                .user
-                                                                                .name
-                                                                        }
-                                                                    </span>
-                                                                </Link>
-                                                            </Button>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ),
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                    <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-                                        <p className="text-muted-foreground text-xs">
-                                            Menampilkan {memberships.from ?? 0}–
-                                            {memberships.to ?? 0} dari{' '}
-                                            {memberships.total}
-                                        </p>
-                                        <PaginationLinks
-                                            links={memberships.links}
-                                        />
-                                    </div>
-                                </>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2 text-base">
-                                        <UserRoundCog className="text-primary size-4" />{' '}
-                                        {editing ? 'Edit Akses' : 'Akun Baru'}
-                                    </CardTitle>
-                                    <p className="text-muted-foreground mt-1 text-xs">
-                                        Akun baru langsung aktif setelah
-                                        disimpan.
-                                    </p>
-                                </div>
-                                {editing && (
-                                    <Button asChild size="sm" variant="ghost">
-                                        <Link href={index()}>
-                                            <X />
-                                            <span className="sr-only">
-                                                Batal edit
-                                            </span>
-                                        </Link>
-                                    </Button>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <Form
-                                key={editing?.uuid ?? 'create'}
-                                {...formRoute}
-                                className="grid gap-4"
-                                disableWhileProcessing
-                            >
-                                {({ errors, processing }) => (
-                                    <>
-                                        {editing ? (
-                                            <div className="bg-muted/40 rounded-lg border p-3">
-                                                <p className="font-medium">
-                                                    {editing.user.name}
-                                                </p>
-                                                <p className="text-muted-foreground text-xs">
-                                                    {editing.user.email}
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <FormField
-                                                    id="name"
-                                                    label="Nama lengkap"
-                                                    error={errors.name}
-                                                    required
-                                                >
-                                                    <Input
-                                                        id="name"
-                                                        name="name"
-                                                    />
-                                                </FormField>
-                                                <FormField
-                                                    id="email"
-                                                    label="Email login"
-                                                    error={errors.email}
-                                                    required
-                                                >
-                                                    <Input
-                                                        id="email"
-                                                        name="email"
-                                                        type="email"
-                                                    />
-                                                </FormField>
-                                                <FormField
-                                                    id="password"
-                                                    label="Kata sandi sementara"
-                                                    error={errors.password}
-                                                    required
-                                                >
-                                                    <Input
-                                                        id="password"
-                                                        name="password"
-                                                        type="password"
-                                                        autoComplete="new-password"
-                                                    />
-                                                </FormField>
-                                                <FormField
-                                                    id="password_confirmation"
-                                                    label="Konfirmasi kata sandi"
-                                                    required
-                                                >
-                                                    <Input
-                                                        id="password_confirmation"
-                                                        name="password_confirmation"
-                                                        type="password"
-                                                        autoComplete="new-password"
-                                                    />
-                                                </FormField>
-                                            </>
-                                        )}
-                                        <FormField
-                                            id="role_id"
-                                            label="Peran"
-                                            error={errors.role_id}
-                                            required
-                                        >
-                                            <RoleSelect
-                                                roles={roles}
-                                                initialRoleId={editing?.role_id}
-                                                locked={
-                                                    editing?.is_self ?? false
-                                                }
-                                            />
-                                        </FormField>
-                                        <FormField
-                                            id="staff_profile_id"
-                                            label="Profil staf"
-                                            error={errors.staff_profile_id}
-                                            description="Opsional, satu profil staf hanya dapat terhubung ke satu akun."
-                                        >
-                                            <select
-                                                id="staff_profile_id"
-                                                name="staff_profile_id"
-                                                defaultValue={
-                                                    editing?.staff_profile_id ??
-                                                    ''
-                                                }
-                                                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-                                            >
-                                                <option value="">
-                                                    Tidak dihubungkan
-                                                </option>
-                                                {staff.map((profile) => (
-                                                    <option
-                                                        key={profile.uuid}
-                                                        value={profile.id}
-                                                    >
-                                                        {profile.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </FormField>
-                                        {editing && (
-                                            <FormField
-                                                id="is_active"
-                                                label="Status akses"
-                                                error={errors.is_active}
-                                                required
-                                            >
-                                                <select
-                                                    id="is_active"
-                                                    name="is_active"
-                                                    defaultValue={
-                                                        editing.is_active
-                                                            ? '1'
-                                                            : '0'
-                                                    }
-                                                    disabled={editing.is_self}
-                                                    className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-                                                >
-                                                    <option value="1">
-                                                        Aktif
-                                                    </option>
-                                                    <option value="0">
-                                                        Nonaktif
-                                                    </option>
-                                                </select>
-                                                {editing.is_self && (
-                                                    <input
-                                                        type="hidden"
-                                                        name="is_active"
-                                                        value="1"
-                                                    />
-                                                )}
-                                            </FormField>
-                                        )}
-                                        {canManageRoles && (
-                                            <div className="grid gap-3 border-t pt-4">
-                                                <div>
-                                                    <p className="flex items-center gap-2 text-sm font-medium">
-                                                        <KeyRound className="size-4" />{' '}
-                                                        Izin tambahan
-                                                    </p>
-                                                    <p className="text-muted-foreground text-xs">
-                                                        Tambahan di luar izin
-                                                        bawaan peran. Ubah izin
-                                                        bawaan dari menu Peran &
-                                                        Izin.
-                                                    </p>
-                                                </div>
-                                                {Object.entries(
-                                                    permissions,
-                                                ).map(
-                                                    ([
-                                                        group,
-                                                        groupPermissions,
-                                                    ]) => (
-                                                        <fieldset
-                                                            key={group}
-                                                            className="grid gap-2"
-                                                        >
-                                                            <legend className="text-muted-foreground mb-1 text-xs font-medium uppercase">
-                                                                {group}
-                                                            </legend>
-                                                            {groupPermissions.map(
-                                                                (
-                                                                    permission,
-                                                                ) => (
-                                                                    <label
-                                                                        key={
-                                                                            permission.key
-                                                                        }
-                                                                        className="flex items-start gap-2 text-sm"
-                                                                    >
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            name="permissions[]"
-                                                                            value={
-                                                                                permission.key
-                                                                            }
-                                                                            defaultChecked={editing?.permissions.includes(
-                                                                                permission.key,
-                                                                            )}
-                                                                            className="accent-primary mt-0.5 size-4"
-                                                                        />
-                                                                        <span>
-                                                                            {
-                                                                                permission.name
-                                                                            }
-                                                                        </span>
-                                                                    </label>
-                                                                ),
-                                                            )}
-                                                        </fieldset>
-                                                    ),
-                                                )}
-                                            </div>
-                                        )}
-                                        <Button
-                                            type="submit"
-                                            disabled={processing}
-                                        >
-                                            {processing ? (
-                                                <Spinner />
-                                            ) : (
-                                                <Save />
-                                            )}{' '}
-                                            {editing
-                                                ? 'Simpan Akses'
-                                                : 'Buat Akun'}
-                                        </Button>
-                                    </>
-                                )}
-                            </Form>
-                        </CardContent>
-                    </Card>
+                <div
+                    className="bg-card grid grid-cols-3 divide-x rounded-xl border"
+                    aria-label="Ringkasan pengguna klinik"
+                >
+                    {[
+                        ['Total pengguna', summary.total],
+                        ['Aktif', summary.active],
+                        ['Nonaktif', summary.inactive],
+                    ].map(([label, count]) => (
+                        <div
+                            key={label}
+                            className="grid gap-1 px-4 py-3 sm:px-5"
+                        >
+                            <span className="text-muted-foreground text-xs">
+                                {label}
+                            </span>
+                            <span className="text-xl font-semibold tabular-nums">
+                                {count}
+                            </span>
+                        </div>
+                    ))}
                 </div>
+                <section
+                    className="bg-card min-w-0 rounded-xl border"
+                    aria-label="Daftar pengguna"
+                >
+                    <UserFilters
+                        key={JSON.stringify(filters)}
+                        filters={filters}
+                        roles={roles}
+                    />
+                    {memberships.data.length === 0 ? (
+                        <EmptyState
+                            icon={Users}
+                            title={
+                                filtered
+                                    ? 'Pengguna tidak ditemukan'
+                                    : 'Belum ada pengguna'
+                            }
+                            description={
+                                filtered
+                                    ? 'Coba nama, email, peran, atau status lain.'
+                                    : 'Tambahkan akun agar tim dapat bekerja sesuai perannya.'
+                            }
+                            className="rounded-none border-0"
+                        />
+                    ) : (
+                        <>
+                            <div className="divide-y md:hidden">
+                                {memberships.data.map((user) => (
+                                    <article
+                                        key={user.uuid}
+                                        className="grid gap-3 p-4"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <UserIdentity user={user} />
+                                            <UserStatus
+                                                active={user.is_active}
+                                            />
+                                        </div>
+                                        <div className="flex items-end justify-between gap-2">
+                                            <div className="grid gap-1 text-xs">
+                                                <span className="font-medium">
+                                                    {user.role.name}
+                                                    {user.permission_count >
+                                                        0 && (
+                                                        <span className="text-muted-foreground font-normal">
+                                                            {' '}
+                                                            · +
+                                                            {
+                                                                user.permission_count
+                                                            }{' '}
+                                                            izin
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    {user.staff_name ??
+                                                        'Profil staf belum dihubungkan'}
+                                                </span>
+                                            </div>
+                                            {editLink(user)}
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+                            <div className="hidden md:block">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/25">
+                                            <TableHead className="pl-5">
+                                                Pengguna
+                                            </TableHead>
+                                            <TableHead>Peran & akses</TableHead>
+                                            <TableHead className="hidden lg:table-cell">
+                                                Profil staf
+                                            </TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="hidden 2xl:table-cell">
+                                                Login terakhir
+                                            </TableHead>
+                                            <TableHead className="pr-5 text-right">
+                                                <span className="sr-only">
+                                                    Aksi
+                                                </span>
+                                            </TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {memberships.data.map((user) => (
+                                            <TableRow key={user.uuid}>
+                                                <TableCell className="py-4 pl-5">
+                                                    <UserIdentity user={user} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <p className="text-sm">
+                                                        {user.role.name}
+                                                    </p>
+                                                    <p className="text-muted-foreground mt-1 text-xs">
+                                                        {user.permission_count >
+                                                        0
+                                                            ? `+${user.permission_count} izin tambahan`
+                                                            : 'Sesuai peran'}
+                                                    </p>
+                                                </TableCell>
+                                                <TableCell className="hidden lg:table-cell">
+                                                    <span
+                                                        className={
+                                                            user.staff_name
+                                                                ? 'text-sm'
+                                                                : 'text-muted-foreground text-xs'
+                                                        }
+                                                    >
+                                                        {user.staff_name ??
+                                                            'Belum dihubungkan'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <UserStatus
+                                                        active={user.is_active}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground hidden text-xs 2xl:table-cell">
+                                                    {user.user.last_login_at
+                                                        ? loginDateFormat.format(
+                                                              new Date(
+                                                                  user.user
+                                                                      .last_login_at,
+                                                              ),
+                                                          )
+                                                        : 'Belum pernah login'}
+                                                </TableCell>
+                                                <TableCell className="pr-5 text-right">
+                                                    {editLink(user)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 sm:px-5">
+                        <p
+                            className="text-muted-foreground text-xs"
+                            role="status"
+                        >
+                            {memberships.from ?? 0}–{memberships.to ?? 0} dari{' '}
+                            {memberships.total} pengguna
+                            {filtered ? ' sesuai filter' : ''}
+                        </p>
+                        <PaginationLinks
+                            links={memberships.links}
+                            only={listProps}
+                            preserveState
+                        />
+                    </div>
+                </section>
             </div>
+            {formOpen && (
+                <ClinicUserForm
+                    key={editing?.uuid ?? 'create'}
+                    editing={editing}
+                    roles={roles}
+                    staff={staff}
+                    permissions={permissions}
+                    canManageRoles={canManageRoles}
+                    onClose={() => closeForm()}
+                    onSaved={() => closeForm(true)}
+                />
+            )}
         </>
     );
 }
 
+function UserFilters({
+    filters,
+    roles,
+}: {
+    filters: Filters;
+    roles: ClinicUserRole[];
+}) {
+    const form = useForm(filters);
+    const filtered = Boolean(filters.search || filters.status || filters.role);
+    return (
+        <form
+            aria-label="Filter pengguna"
+            onSubmit={(event) => {
+                event.preventDefault();
+                form.get(index.url(), {
+                    only: listProps,
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                });
+            }}
+            className="grid gap-2 border-b p-4"
+        >
+            <fieldset
+                disabled={form.processing}
+                className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1fr)_12rem_10rem_auto]"
+            >
+                <div className="relative sm:col-span-2 xl:col-span-1">
+                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                    <Input
+                        type="search"
+                        aria-label="Cari nama atau email pengguna"
+                        placeholder="Cari nama atau email…"
+                        value={form.data.search}
+                        onChange={(event) =>
+                            form.setData('search', event.target.value)
+                        }
+                        maxLength={100}
+                        className="h-10 pl-9"
+                    />
+                </div>
+                <select
+                    aria-label="Filter peran"
+                    value={form.data.role}
+                    onChange={(event) =>
+                        form.setData('role', event.target.value)
+                    }
+                    className={accessSelectClassName}
+                >
+                    <option value="">Semua peran</option>
+                    {roles.map((role) => (
+                        <option key={role.id} value={role.code}>
+                            {role.name}
+                        </option>
+                    ))}
+                </select>
+                <select
+                    aria-label="Filter status pengguna"
+                    value={form.data.status}
+                    onChange={(event) =>
+                        form.setData('status', event.target.value)
+                    }
+                    className={accessSelectClassName}
+                >
+                    <option value="">Semua status</option>
+                    <option value="active">Aktif</option>
+                    <option value="inactive">Nonaktif</option>
+                </select>
+                <div className="flex gap-2 sm:col-span-2 xl:col-span-1">
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        className="h-10 flex-1"
+                    >
+                        {form.processing ? <Spinner /> : <Search />}Cari
+                    </Button>
+                    {filtered && (
+                        <Button asChild variant="ghost" className="h-10">
+                            <Link
+                                href={index()}
+                                only={listProps}
+                                preserveState
+                                preserveScroll
+                                replace
+                                aria-label="Reset filter pengguna"
+                            >
+                                <X />
+                                Reset
+                            </Link>
+                        </Button>
+                    )}
+                </div>
+            </fieldset>
+            {Object.entries(form.errors).map(([key, error]) => (
+                <p key={key} role="alert" className="text-destructive text-xs">
+                    {error}
+                </p>
+            ))}
+        </form>
+    );
+}
+
+function UserIdentity({ user }: { user: ClinicUser }) {
+    return (
+        <div className="flex min-w-0 items-center gap-3">
+            <div
+                className="bg-muted text-muted-foreground hidden size-9 shrink-0 items-center justify-center rounded-lg text-xs font-medium sm:flex"
+                aria-hidden="true"
+            >
+                {user.user.name
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join('')
+                    .toUpperCase()}
+            </div>
+            <div className="min-w-0">
+                <p className="font-medium wrap-anywhere whitespace-normal">
+                    {user.user.name}
+                    {user.is_self && (
+                        <span className="text-muted-foreground ml-1.5 text-xs font-normal">
+                            Anda
+                        </span>
+                    )}
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs wrap-anywhere whitespace-normal">
+                    {user.user.email}
+                </p>
+            </div>
+        </div>
+    );
+}
+function UserStatus({ active }: { active: boolean }) {
+    return (
+        <Badge variant="outline" className="shrink-0 gap-1.5 font-normal">
+            <span
+                className={`size-1.5 rounded-full ${active ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-muted-foreground/50'}`}
+            />
+            {active ? 'Aktif' : 'Nonaktif'}
+        </Badge>
+    );
+}
 ClinicUsersIndex.layout = {
     breadcrumbs: [
         { title: 'Ringkasan', href: dashboard() },
         { title: 'Pengguna & Akses', href: index() },
     ],
 };
-
-function RoleSelect({
-    roles,
-    initialRoleId,
-    locked,
-}: {
-    roles: Role[];
-    initialRoleId?: number;
-    locked: boolean;
-}) {
-    const [roleId, setRoleId] = useState(initialRoleId?.toString() ?? '');
-    const selected = roles.find((role) => role.id.toString() === roleId);
-    const menus = selected
-        ? operationalNavigation(selected.permissions).map((item) => item.title)
-        : [];
-
-    return (
-        <div className="grid gap-2">
-            <select
-                id="role_id"
-                name="role_id"
-                value={roleId}
-                onChange={(event) => setRoleId(event.target.value)}
-                disabled={locked}
-                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-            >
-                <option value="" disabled>
-                    Pilih peran
-                </option>
-                {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                        {role.name}
-                    </option>
-                ))}
-            </select>
-            {locked && <input type="hidden" name="role_id" value={roleId} />}
-            {selected && (
-                <div className="bg-muted/30 grid gap-2 rounded-lg border p-3 text-xs">
-                    <p className="text-muted-foreground">
-                        {selected.description}
-                    </p>
-                    <p>
-                        <span className="font-medium">Menu operasional: </span>
-                        {menus.join(', ')}.
-                    </p>
-                </div>
-            )}
-        </div>
-    );
-}

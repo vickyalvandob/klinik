@@ -45,4 +45,19 @@ class UpdateClinicUserRequest extends FormRequest
             'permissions.*' => ['string', Rule::exists(Permission::class, 'key')],
         ];
     }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'role_id.required' => 'Pilih peran pengguna terlebih dahulu.',
+            'role_id.exists' => 'Peran tidak tersedia. Muat ulang halaman dan pilih kembali.',
+            'staff_profile_id.unique' => 'Profil staf ini sudah terhubung dengan pengguna lain.',
+            'staff_profile_id.exists' => 'Profil staf tidak tersedia di klinik ini.',
+            'is_active.required' => 'Pilih status akses pengguna.',
+            'is_active.boolean' => 'Status akses pengguna tidak valid.',
+            'permissions.prohibited' => 'Hanya pengelola peran yang dapat mengubah izin tambahan.',
+            'permissions.*.exists' => 'Izin tambahan tidak dikenali. Muat ulang halaman dan pilih kembali.',
+        ];
+    }
 }
