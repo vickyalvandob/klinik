@@ -1,6 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import { useRef } from 'react';
-import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
+import { update } from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -8,10 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/security';
 
-// oxfmt-ignore
 type Props = {
     passwordRules: string;
-} ;
+};
 
 export default function Security(props: Props) {
     const passwordInput = useRef<HTMLInputElement>(null);
@@ -19,19 +18,19 @@ export default function Security(props: Props) {
 
     return (
         <>
-            <Head title="Security settings" />
+            <Head title="Keamanan" />
 
-            <h1 className="sr-only">Security settings</h1>
+            <h1 className="sr-only">Keamanan</h1>
 
-            <div className="space-y-6">
+            <div className="space-y-5">
                 <Heading
                     variant="small"
-                    title="Update password"
-                    description="Ensure your account is using a long, random password to stay secure"
+                    title="Ubah kata sandi"
+                    description="Gunakan kata sandi yang kuat dan berbeda dari akun lainnya."
                 />
 
                 <Form
-                    {...SecurityController.update.form()}
+                    {...update.form()}
                     options={{
                         preserveScroll: true,
                     }}
@@ -50,37 +49,39 @@ export default function Security(props: Props) {
                             currentPasswordInput.current?.focus();
                         }
                     }}
-                    className="space-y-6"
+                    className="space-y-5"
                 >
-                    {({ errors, processing }) => (
+                    {({ errors, processing, recentlySuccessful, isDirty }) => (
                         <>
                             <div className="grid gap-2">
                                 <Label htmlFor="current_password">
-                                    Current password
+                                    Kata sandi saat ini
                                 </Label>
 
                                 <PasswordInput
                                     id="current_password"
                                     ref={currentPasswordInput}
                                     name="current_password"
-                                    className="mt-1 block w-full"
+                                    required
                                     autoComplete="current-password"
-                                    placeholder="Current password"
+                                    placeholder="Kata sandi saat ini"
                                 />
 
                                 <InputError message={errors.current_password} />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="password">New password</Label>
+                                <Label htmlFor="password">
+                                    Kata sandi baru
+                                </Label>
 
                                 <PasswordInput
                                     id="password"
                                     ref={passwordInput}
                                     name="password"
-                                    className="mt-1 block w-full"
+                                    required
                                     autoComplete="new-password"
-                                    placeholder="New password"
+                                    placeholder="Kata sandi baru"
                                     passwordrules={props.passwordRules}
                                 />
 
@@ -89,15 +90,15 @@ export default function Security(props: Props) {
 
                             <div className="grid gap-2">
                                 <Label htmlFor="password_confirmation">
-                                    Confirm password
+                                    Konfirmasi kata sandi baru
                                 </Label>
 
                                 <PasswordInput
                                     id="password_confirmation"
                                     name="password_confirmation"
-                                    className="mt-1 block w-full"
+                                    required
                                     autoComplete="new-password"
-                                    placeholder="Confirm password"
+                                    placeholder="Ulangi kata sandi baru"
                                     passwordrules={props.passwordRules}
                                 />
 
@@ -106,13 +107,23 @@ export default function Security(props: Props) {
                                 />
                             </div>
 
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-wrap items-center gap-3 border-t pt-4">
                                 <Button
-                                    disabled={processing}
+                                    disabled={processing || !isDirty}
                                     data-test="update-password-button"
                                 >
-                                    Save
+                                    {processing
+                                        ? 'Menyimpan...'
+                                        : 'Simpan kata sandi'}
                                 </Button>
+                                <span
+                                    role="status"
+                                    className="text-muted-foreground text-sm"
+                                >
+                                    {recentlySuccessful && !isDirty
+                                        ? 'Kata sandi berhasil diperbarui.'
+                                        : ''}
+                                </span>
                             </div>
                         </>
                     )}
@@ -125,7 +136,7 @@ export default function Security(props: Props) {
 Security.layout = {
     breadcrumbs: [
         {
-            title: 'Security settings',
+            title: 'Keamanan',
             href: edit(),
         },
     ],

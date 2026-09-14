@@ -32,7 +32,7 @@ export function NavMain({
 
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel className="px-3 text-[11px] font-medium tracking-wide">
+            <SidebarGroupLabel className="h-6 px-3 text-[11px] font-medium tracking-wide">
                 {label}
             </SidebarGroupLabel>
             <SidebarMenu>
@@ -42,13 +42,15 @@ export function NavMain({
                             asChild
                             isActive={isActive(item)}
                             tooltip={{ children: item.title }}
-                            className="data-[active=true]:bg-primary/8 data-[active=true]:text-primary text-sidebar-foreground/75 min-h-10 rounded-md px-3 text-[13px] data-[active=true]:font-medium [&>svg]:size-4 [&>svg]:stroke-[1.75]"
+                            className="data-[active=true]:bg-primary/8 data-[active=true]:text-primary text-sidebar-foreground/75 h-10 rounded-md px-3 text-[13px] data-[active=true]:font-medium md:h-9 [&>svg]:size-4 [&>svg]:stroke-[1.75]"
                         >
                             <Link
                                 href={item.href}
-                                prefetch
-                                onClick={() => {
-                                    if (isMobile) setOpenMobile(false);
+                                className="data-loading:opacity-60"
+                                onSuccess={() => {
+                                    if (isMobile) {
+                                        setOpenMobile(false);
+                                    }
                                 }}
                                 aria-current={
                                     isActive(item) ? 'page' : undefined

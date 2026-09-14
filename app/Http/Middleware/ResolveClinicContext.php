@@ -27,8 +27,11 @@ class ResolveClinicContext
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $mode = 'required'): Response
     {
+        $this->currentClinic->clear();
+        $this->currentTenant->clear();
+        $optional = $mode === 'optional';
         $user = $request->user();
         abort_if($user === null, 401);
 
@@ -39,6 +42,10 @@ class ResolveClinicContext
             ->get();
 
         if ($memberships->isEmpty()) {
+            if ($optional) {
+                return $next($request);
+            }
+
             if ($user->is_platform_admin) {
                 return redirect()->route('platform.index');
             }
@@ -53,6 +60,11 @@ class ResolveClinicContext
 
         if ($membership === null) {
             $request->session()->forget('current_clinic_id');
+
+            if ($optional) {
+                return $next($request);
+            }
+
             abort(404);
         }
 
@@ -61,8 +73,11 @@ class ResolveClinicContext
             ->where('status', TenantStatus::Active->value)
             ->first();
 
+        if ($tenant === null && $optional) {
+            return $next($request);
+        }
+
         abort_if($tenant === null, 403, 'Tenant tidak aktif.');
-        $this->currentTenant->set($tenant);
 
         $clinic = Clinic::withoutGlobalScope(TenantScope::class)
             ->whereKey($membership->clinic_id)
@@ -70,7 +85,12 @@ class ResolveClinicContext
             ->where('is_active', true)
             ->first();
 
+        if ($clinic === null && $optional) {
+            return $next($request);
+        }
+
         abort_if($clinic === null, 403, 'Klinik tidak aktif atau membership tidak valid.');
+        $this->currentTenant->set($tenant);
 
         $membership->load(['role.permissions', 'permissions']);
         $membership->setRelation('clinicRole', ClinicRole::query()

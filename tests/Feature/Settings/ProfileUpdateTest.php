@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -50,36 +51,45 @@ test('email verification status is unchanged when the email address is unchanged
     expect($user->refresh()->email_verified_at)->not->toBeNull();
 });
 
-test('user can delete their account', function () {
+test('account deletion is unavailable even with the correct password', function () {
     $user = User::factory()->create();
 
     $response = $this
         ->actingAs($user)
-        ->delete(route('profile.destroy'), [
+        ->delete(route('profile.edit'), [
             'password' => 'password',
         ]);
 
-    $response
-        ->assertSessionHasNoErrors()
-        ->assertRedirect(route('home'));
+    $response->assertMethodNotAllowed();
 
-    $this->assertGuest();
-    expect($user->fresh())->toBeNull();
+    $this->assertAuthenticatedAs($user);
+    $this->assertModelExists($user);
 });
 
-test('correct password must be provided to delete account', function () {
-    $user = User::factory()->create();
+test('account deletion cannot remove an owner or clinic membership', function () {
+    $context = createClinicUser();
 
     $response = $this
-        ->actingAs($user)
-        ->from(route('profile.edit'))
-        ->delete(route('profile.destroy'), [
-            'password' => 'wrong-password',
-        ]);
+        ->actingAs($context['user'])
+        ->delete(route('profile.edit'), ['password' => 'password']);
 
-    $response
-        ->assertSessionHasErrors('password')
-        ->assertRedirect(route('profile.edit'));
+    $response->assertMethodNotAllowed();
 
-    expect($user->fresh())->not->toBeNull();
+    $this->assertModelExists($context['user']);
+    $this->assertModelExists($context['membership']);
+    $this->assertModelExists($context['clinic']);
+});
+
+test('updated profile is shared on the next navigation without a page reload', function () {
+    $context = createClinicUser();
+
+    $this->actingAs($context['user'])->patch(route('profile.update'), [
+        'name' => 'Nama Baru',
+        'email' => 'nama.baru@example.test',
+    ])->assertSessionHasNoErrors();
+
+    $this->get(route('appearance.edit'))->assertInertia(fn (Assert $page) => $page
+        ->where('auth.user.name', 'Nama Baru')
+        ->where('auth.user.email', 'nama.baru@example.test')
+        ->where('currentClinic.uuid', $context['clinic']->uuid));
 });

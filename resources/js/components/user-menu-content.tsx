@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -7,54 +7,49 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
-import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { accountNavigation } from '@/lib/app-navigation';
 import { logout } from '@/routes';
-import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 
 type Props = {
     user: User;
+    onNavigate?: () => void;
 };
 
-export function UserMenuContent({ user }: Props) {
-    const cleanup = useMobileNavigation();
-
-    const handleLogout = () => {
-        cleanup();
-        router.flushAll();
-    };
-
+export function UserMenuContent({ user, onNavigate }: Props) {
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <UserInfo user={user} showEmail={true} />
+                    <UserInfo user={user} showEmail />
                 </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                    <Link
-                        className="block w-full cursor-pointer"
-                        href={edit()}
-                        prefetch
-                        onClick={cleanup}
-                    >
-                        <Settings className="mr-2" />
-                        Pengaturan
-                    </Link>
-                </DropdownMenuItem>
+                {accountNavigation.map((item) => (
+                    <DropdownMenuItem key={item.title} asChild>
+                        <Link
+                            className="flex min-h-10 w-full cursor-pointer items-center gap-2"
+                            href={item.href}
+                            onSuccess={onNavigate}
+                        >
+                            {item.icon && <item.icon />}
+                            {item.title}
+                        </Link>
+                    </DropdownMenuItem>
+                ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
                 <Link
-                    className="block w-full cursor-pointer"
+                    className="flex min-h-10 w-full cursor-pointer items-center gap-2"
                     href={logout()}
                     as="button"
-                    onClick={handleLogout}
+                    onBefore={() => router.flushAll()}
+                    onSuccess={onNavigate}
                     data-test="logout-button"
                 >
-                    <LogOut className="mr-2" />
+                    <LogOut />
                     Keluar
                 </Link>
             </DropdownMenuItem>

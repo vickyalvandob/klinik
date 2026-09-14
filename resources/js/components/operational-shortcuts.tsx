@@ -10,11 +10,11 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { operationalNavigation } from '@/lib/operational-navigation';
+import { accountNavigation, appNavigation } from '@/lib/app-navigation';
 import { create as createRegistration } from '@/routes/registrations';
 
 export function OperationalShortcuts() {
-    const { currentMembership } = usePage().props;
+    const { auth, currentClinic, currentMembership } = usePage().props;
     const permissions = currentMembership?.permissions ?? [];
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -28,7 +28,12 @@ export function OperationalShortcuts() {
                   },
               ]
             : []),
-        ...operationalNavigation(permissions),
+        ...appNavigation(
+            currentClinic,
+            permissions,
+            auth.user?.is_platform_admin,
+        ).flatMap((group) => group.items),
+        ...accountNavigation,
     ].filter((item) =>
         item.title
             .toLocaleLowerCase('id-ID')
@@ -59,11 +64,11 @@ export function OperationalShortcuts() {
                     setQuery('');
                     setOpen(true);
                 }}
-                aria-label="Buka pintasan (Ctrl+K)"
+                aria-label="Cari menu (Ctrl+K)"
                 aria-keyshortcuts="Control+k Meta+k"
             >
                 <Keyboard />
-                <span className="hidden sm:inline">Pintasan</span>
+                <span className="hidden sm:inline">Cari menu</span>
                 <kbd className="text-muted-foreground hidden text-xs lg:inline">
                     Ctrl K
                 </kbd>
@@ -71,7 +76,7 @@ export function OperationalShortcuts() {
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Pintasan</DialogTitle>
+                        <DialogTitle>Cari menu</DialogTitle>
                         <DialogDescription>
                             Cari menu, lalu pilih untuk membukanya.
                         </DialogDescription>
@@ -88,7 +93,7 @@ export function OperationalShortcuts() {
                         />
                     </div>
                     <nav
-                        aria-label="Pintasan operasional"
+                        aria-label="Semua menu yang tersedia"
                         className="grid max-h-[55vh] gap-1 overflow-y-auto"
                     >
                         {items.map((item) => (
@@ -100,7 +105,7 @@ export function OperationalShortcuts() {
                             >
                                 <Link
                                     href={item.href}
-                                    onClick={() => setOpen(false)}
+                                    onSuccess={() => setOpen(false)}
                                 >
                                     {item.icon && <item.icon />}
                                     {item.title}

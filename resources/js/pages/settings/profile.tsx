@@ -1,20 +1,14 @@
 import { Form, Head, usePage } from '@inertiajs/react';
-import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
-import DeleteUser from '@/components/delete-user';
+import { update } from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/profile';
-import type { Auth } from '@/types';
-
-type PageProps = {
-    auth: Auth;
-};
 
 export default function Profile() {
-    const { auth } = usePage<PageProps>().props;
+    const { auth, currentClinic, currentMembership } = usePage().props;
     const user = auth.user;
 
     if (!user) {
@@ -23,88 +17,130 @@ export default function Profile() {
 
     return (
         <>
-            <Head title="Profile settings" />
-
-            <h1 className="sr-only">Profile settings</h1>
-
+            <Head title="Profil Saya" />
             <div className="space-y-6">
                 <Heading
                     variant="small"
-                    title="Profile"
-                    description="Update your name and email address"
+                    title="Profil Saya"
+                    description="Nama dan email yang digunakan untuk akun Anda."
                 />
-
+                {currentClinic && currentMembership && (
+                    <dl className="bg-muted/30 grid gap-3 rounded-lg border p-3 text-sm sm:grid-cols-2">
+                        <div className="min-w-0 space-y-1">
+                            <dt className="text-muted-foreground text-xs">
+                                Klinik aktif
+                            </dt>
+                            <dd className="font-medium break-words">
+                                {currentClinic.name}
+                            </dd>
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                            <dt className="text-muted-foreground text-xs">
+                                Peran Anda
+                            </dt>
+                            <dd className="font-medium break-words">
+                                {currentMembership.role.name}
+                            </dd>
+                        </div>
+                    </dl>
+                )}
                 <Form
-                    {...ProfileController.update.form()}
-                    options={{
-                        preserveScroll: true,
-                    }}
-                    className="space-y-6"
+                    {...update.form()}
+                    options={{ preserveScroll: true }}
+                    setDefaultsOnSuccess
+                    className="space-y-5"
                 >
-                    {({ processing, errors }) => (
+                    {({
+                        processing,
+                        errors,
+                        isDirty,
+                        recentlySuccessful,
+                        resetAndClearErrors,
+                    }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
-
+                                <Label htmlFor="name">Nama lengkap</Label>
                                 <Input
                                     id="name"
-                                    className="mt-1 block w-full"
                                     defaultValue={user.name}
                                     name="name"
                                     required
+                                    maxLength={255}
                                     autoComplete="name"
-                                    placeholder="Full name"
+                                    aria-invalid={!!errors.name}
+                                    aria-describedby={
+                                        errors.name ? 'name-error' : undefined
+                                    }
                                 />
-
                                 <InputError
-                                    className="mt-2"
+                                    id="name-error"
                                     message={errors.name}
                                 />
                             </div>
-
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-
+                                <Label htmlFor="email">Email</Label>
                                 <Input
                                     id="email"
                                     type="email"
-                                    className="mt-1 block w-full"
                                     defaultValue={user.email}
                                     name="email"
                                     required
+                                    maxLength={255}
                                     autoComplete="username"
-                                    placeholder="Email address"
+                                    aria-invalid={!!errors.email}
+                                    aria-describedby={
+                                        errors.email
+                                            ? 'email-error'
+                                            : 'email-help'
+                                    }
                                 />
-
+                                <p
+                                    id="email-help"
+                                    className="text-muted-foreground text-xs"
+                                >
+                                    Gunakan email ini saat masuk ke aplikasi.
+                                </p>
                                 <InputError
-                                    className="mt-2"
+                                    id="email-error"
                                     message={errors.email}
                                 />
                             </div>
-
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-wrap items-center gap-3 border-t pt-4">
                                 <Button
-                                    disabled={processing}
+                                    disabled={processing || !isDirty}
                                     data-test="update-profile-button"
                                 >
-                                    Save
+                                    {processing
+                                        ? 'Menyimpan...'
+                                        : 'Simpan perubahan'}
                                 </Button>
+                                {isDirty && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        disabled={processing}
+                                        onClick={() => resetAndClearErrors()}
+                                    >
+                                        Batal
+                                    </Button>
+                                )}
+                                <span
+                                    role="status"
+                                    className="text-muted-foreground text-sm"
+                                >
+                                    {recentlySuccessful && !isDirty
+                                        ? 'Perubahan tersimpan.'
+                                        : ''}
+                                </span>
                             </div>
                         </>
                     )}
                 </Form>
             </div>
-
-            <DeleteUser />
         </>
     );
 }
 
 Profile.layout = {
-    breadcrumbs: [
-        {
-            title: 'Profile settings',
-            href: edit(),
-        },
-    ],
+    breadcrumbs: [{ title: 'Profil Saya', href: edit() }],
 };
