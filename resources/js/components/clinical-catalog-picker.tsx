@@ -30,9 +30,10 @@ export function ClinicalCatalogPicker<T extends { uuid: string }>({
     const [completedQuery, setCompletedQuery] = useState('');
     const [retry, setRetry] = useState(0);
     const search = query.trim();
-    const visibleItems = completedQuery === search
-        ? items.filter((item) => !exclude.includes(item.uuid))
-        : [];
+    const visibleItems =
+        completedQuery === search
+            ? items.filter((item) => !exclude.includes(item.uuid))
+            : [];
     const activeIndex = Math.min(active, Math.max(0, visibleItems.length - 1));
     const select = (item: T) => {
         onSelect(item);
@@ -203,12 +204,27 @@ export function ClinicalCatalogPicker<T extends { uuid: string }>({
                                   'Tidak ada hasil baru. Coba kata kunci lain.'}
                         </p>
                     )}
-                    {error && <Button type="button" variant="outline" size="sm" className="mb-2 ml-3" onClick={() => setRetry((value) => value + 1)}>Coba lagi</Button>}
+                    {error && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mb-2 ml-3"
+                            onClick={() => setRetry((value) => value + 1)}
+                        >
+                            Coba lagi
+                        </Button>
+                    )}
                 </div>
             )}
-                <p id={`${id}-hint`} className="text-muted-foreground min-h-4 text-xs">
-                    {search.length < 2 ? 'Ketik minimal 2 karakter untuk mencari.' : 'Pilih hasil untuk menambahkan. Gunakan ↑ ↓ dan Enter dengan keyboard.'}
-                </p>
+            <p
+                id={`${id}-hint`}
+                className="text-muted-foreground min-h-4 text-xs"
+            >
+                {search.length < 2
+                    ? 'Ketik minimal 2 karakter untuk mencari.'
+                    : 'Pilih hasil untuk menambahkan. Gunakan ↑ ↓ dan Enter dengan keyboard.'}
+            </p>
         </div>
     );
 }

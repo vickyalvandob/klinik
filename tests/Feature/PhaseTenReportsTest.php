@@ -3,6 +3,7 @@
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Role;
+use App\PaymentMethod;
 use App\SystemRole;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -143,3 +144,36 @@ test('billing report export includes outstanding balances and never patient iden
     expect($response->streamedContent())->toContain('Sisa tagihan (Rp)', '100000')
         ->not->toContain($context['patient']->name);
 });
+
+test('financial report aggregates each ledger once and refreshes totals on the next request', function (string $section) {
+    config(['app.timezone' => 'UTC']);
+    $this->travelTo(CarbonImmutable::parse('2026-09-13 10:00:00 UTC'));
+    $context = createFinalizedVisit($this);
+    $context['invoice']->update(['issued_at' => '2026-09-13 10:00:00']);
+    Payment::factory()->count(4)->sequence(
+        ['method' => PaymentMethod::Cash, 'amount' => 1000],
+        ['method' => PaymentMethod::Cash, 'amount' => 2000],
+        ['method' => PaymentMethod::BankTransfer, 'amount' => 3000],
+        ['method' => PaymentMethod::Cash, 'amount' => 9000, 'status' => 'voided'],
+    )->create(['invoice_id' => $context['invoice']->id, 'received_at' => '2026-09-13 10:00:00']);
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+
+    $response = $this->get(route('reports.index', ['section' => $section]));
+    $queries = collect(DB::getQueryLog())->pluck('query');
+    DB::disableQueryLog();
+
+    $response->assertInertia(fn (Assert $page) => $page
+        ->where('summary.revenue', 6000)->where('summary.payment_count', 3)
+        ->where('summary.voided_payments', 9000)->where('summary.voided_count', 1)
+        ->where('summary.invoiced', 100000)->where('summary.outstanding', 100000)
+        ->where('generatedAt', fn (string $timestamp): bool => CarbonImmutable::parse($timestamp)->utc()->format('Y-m-d H:i:s') === '2026-09-13 10:00:00'));
+    expect($queries->filter(fn (string $query): bool => str_contains($query, 'from "payments"')))->toHaveCount(1);
+    expect($queries->filter(fn (string $query): bool => str_contains($query, 'from "invoices"')))->toHaveCount(1);
+
+    Payment::factory()->create(['invoice_id' => $context['invoice']->id, 'amount' => 4000, 'received_at' => '2026-09-13 10:00:00']);
+    $this->get(route('reports.index', ['section' => 'revenue']))->assertInertia(fn (Assert $page) => $page
+        ->where('summary.revenue', 10000)->where('summary.payment_count', 4)
+        ->has('rows', 2)->where('rows.0.amount', 3000)
+        ->where('rows.1.label', 'Tunai')->where('rows.1.count', 3)->where('rows.1.amount', 7000));
+})->with(['revenue', 'billing']);

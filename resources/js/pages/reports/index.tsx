@@ -1,137 +1,51 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import {
-    BarChart3,
-    Download,
+    Activity,
+    ArrowDownToLine,
+    Banknote,
+    CalendarDays,
+    ChevronRight,
+    ClipboardList,
+    FileText,
     LoaderCircle,
+    Pill,
     Printer,
     RefreshCw,
+    Stethoscope,
 } from 'lucide-react';
 import { useState } from 'react';
-import { FormField } from '@/components/form-field';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { formatCurrency, formatDate } from '@/lib/billing';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { formatDate } from '@/lib/billing';
 import { cn } from '@/lib/utils';
 import { index, exportMethod } from '@/routes/reports';
+import { PeriodFilter } from './period-filter';
+import { reports } from './report-config';
+import type { Period, ReportSection, ReportSummary, Row } from './report-config';
+import { ReportOverview } from './report-overview';
+import { ReportDetails } from './report-details';
 
-type Row = {
-    label: string;
-    count: number;
-    amount: number | null;
-    balance?: number;
+const icons = {
+    revenue: Banknote,
+    billing: FileText,
+    visits: CalendarDays,
+    services: Activity,
+    diagnoses: ClipboardList,
+    doctors: Stethoscope,
+    pharmacy: Pill,
 };
-type Period = { from: string; to: string };
-type ReportSection =
-    | 'visits'
-    | 'revenue'
-    | 'billing'
-    | 'services'
-    | 'diagnoses'
-    | 'doctors'
-    | 'pharmacy';
-const reports: Record<
-    ReportSection,
+const groups: Array<{ title: string; sections: ReportSection[] }> = [
+    { title: 'Keuangan', sections: ['revenue', 'billing'] },
     {
-        title: string;
-        description: string;
-        label: string;
-        count: string;
-        amount?: string;
-        note: string;
-    }
-> = {
-    revenue: {
-        title: 'Penerimaan',
-        description: 'Penerimaan pembayaran menurut metode.',
-        label: 'Metode pembayaran',
-        count: 'Transaksi',
-        amount: 'Diterima',
-        note: 'Berdasarkan tanggal pembayaran dalam waktu klinik. Pembayaran yang kini dibatalkan tidak dihitung sebagai penerimaan aktif.',
-    },
-    billing: {
-        title: 'Tagihan & piutang',
-        description: 'Nilai tagihan dan sisa yang perlu ditagih.',
-        label: 'Status tagihan',
-        count: 'Tagihan',
-        amount: 'Total tagihan',
-        note: 'Berdasarkan tanggal tagihan diterbitkan. Status dan sisa tagihan menunjukkan kondisi saat ini, bukan saldo pada akhir periode. Nilai tagihan dibatalkan ditampilkan sebagai riwayat.',
-    },
-    visits: {
-        title: 'Kunjungan',
-        description: 'Volume kunjungan pasien per hari.',
-        label: 'Tanggal kunjungan',
-        count: 'Kunjungan',
-        note: 'Berdasarkan tanggal kunjungan. Jumlah mencakup kunjungan yang selesai, masih berjalan, dan dibatalkan.',
-    },
-    services: {
-        title: 'Layanan & tindakan',
-        description: 'Layanan yang diberikan dan nilai tarifnya.',
-        label: 'Layanan / tindakan',
-        count: 'Tindakan',
-        amount: 'Nilai layanan',
-        note: 'Berdasarkan tanggal kunjungan dan catatan medis final. Nilai layanan adalah tarif tindakan yang tercatat, bukan penerimaan kas. Maksimal 100 kelompok teratas.',
-    },
-    diagnoses: {
-        title: 'Diagnosis',
-        description: 'Distribusi diagnosis untuk evaluasi pelayanan.',
-        label: 'Diagnosis',
-        count: 'Diagnosis',
-        note: 'Berdasarkan tanggal kunjungan dan diagnosis dalam catatan medis final. Kunjungan yang dibatalkan tidak dihitung. Maksimal 100 kelompok teratas, tanpa identitas pasien.',
-    },
-    doctors: {
-        title: 'Dokter',
-        description: 'Distribusi kunjungan menurut dokter.',
-        label: 'Dokter',
-        count: 'Kunjungan',
-        note: 'Berdasarkan tanggal kunjungan. Kunjungan yang dibatalkan tidak dihitung. Maksimal 100 dokter.',
-    },
-    pharmacy: {
-        title: 'Farmasi',
-        description: 'Jumlah resep menurut status pelayanan.',
-        label: 'Status resep',
-        count: 'Resep',
-        note: 'Berdasarkan tanggal kunjungan. Status resep menunjukkan kondisi saat ini. Resep draf dan kunjungan yang dibatalkan tidak dihitung.',
-    },
-};
-const metrics: Array<{
-    key: string;
-    label: string;
-    detail: string;
-    currency?: boolean;
-}> = [
-    {
-        key: 'revenue',
-        label: 'Penerimaan aktif',
-        detail: 'Pembayaran diterima dalam periode',
-        currency: true,
-    },
-    {
-        key: 'invoiced',
-        label: 'Nilai tagihan',
-        detail: 'Terbit dalam periode, selain dibatalkan',
-        currency: true,
-    },
-    {
-        key: 'outstanding',
-        label: 'Sisa tagihan saat ini',
-        detail: 'Dari tagihan terbit dalam periode',
-        currency: true,
-    },
-    {
-        key: 'visits',
-        label: 'Total kunjungan',
-        detail: 'Seluruh status kunjungan',
-    },
-    {
-        key: 'completed',
-        label: 'Kunjungan selesai',
-        detail: 'Pelayanan telah selesai',
-    },
-    {
-        key: 'cancelled',
-        label: 'Kunjungan dibatalkan',
-        detail: 'Tetap tercatat dalam riwayat',
+        title: 'Pelayanan',
+        sections: ['visits', 'services', 'diagnoses', 'doctors', 'pharmacy'],
     },
 ];
 
@@ -143,40 +57,78 @@ export default function Reports({
     rows,
     periods,
     timezone,
+    generatedAt,
     canExport,
 }: {
     filters: Period;
-    summary: Record<string, number>;
+    summary: ReportSummary;
     sections: ReportSection[];
     section: ReportSection | null;
     rows: Row[];
     periods: Array<Period & { label: string }>;
     timezone: string;
+    generatedAt: string;
     canExport: boolean;
 }) {
     const { errors, currentClinic } = usePage().props;
     const [loading, setLoading] = useState(false);
+    const [failure, setFailure] = useState<string | null>(null);
+    const [retry, setRetry] = useState<{
+        period: Period;
+        section: ReportSection | null;
+    } | null>(null);
     const selected = section ? reports[section] : null;
+    const SelectedIcon = section ? icons[section] : FileText;
 
-    function visit(period: Period, nextSection = section, only?: string[]) {
+    function visit(
+        period: Period,
+        nextSection = section,
+        onSuccess?: () => void,
+    ) {
+        if (loading) return;
+        const categoryOnly =
+            nextSection !== section &&
+            period.from === filters.from &&
+            period.to === filters.to;
+        setRetry({ period, section: nextSection });
+        setFailure(null);
         router.get(
             index.url(),
             { ...period, ...(nextSection ? { section: nextSection } : {}) },
             {
-                only: only ?? [
+                only: [
                     'filters',
-                    'summary',
                     'rows',
+                    'summary',
                     'section',
                     'sections',
-                    'periods',
-                    'timezone',
                     'canExport',
+                    'generatedAt',
+                    ...(categoryOnly ? [] : ['periods', 'timezone']),
                 ],
                 preserveState: true,
                 preserveScroll: true,
-                replace: true,
                 onStart: () => setLoading(true),
+                onSuccess: () => {
+                    setRetry(null);
+                    onSuccess?.();
+                },
+                onError: () =>
+                    setFailure(
+                        'Periode belum diterapkan. Periksa kembali tanggal yang dipilih.',
+                    ),
+                onNetworkError: () => {
+                    setFailure(
+                        'Laporan gagal dimuat. Periksa koneksi lalu coba lagi. Data sebelumnya tetap ditampilkan.',
+                    );
+                    return false;
+                },
+                onHttpException: () => {
+                    setFailure(
+                        'Laporan belum dapat dimuat. Coba lagi atau muat ulang halaman untuk memperbarui akses.',
+                    );
+                    return false;
+                },
                 onFinish: () => setLoading(false),
             },
         );
@@ -185,313 +137,241 @@ export default function Reports({
     return (
         <>
             <Head title="Laporan Manajemen" />
-            <div className="print-document flex min-w-0 flex-1 flex-col gap-5 p-4 md:p-6 print:gap-4 print:p-0">
+            <div className="print-document mx-auto flex w-full max-w-7xl min-w-0 flex-1 flex-col gap-5 p-4 md:p-6 print:gap-4 print:p-0 print:text-black print:[--color-border:#e4e4e7] print:[--color-card:white] print:[--color-muted-foreground:#52525b] print:[--color-muted:#f4f4f5] print:[--color-primary:#0f766e]">
                 <PageHeader
                     eyebrow={currentClinic?.name}
                     title="Laporan Manajemen"
-                    description="Pantau keuangan dan pelayanan klinik sesuai periode."
+                    description="Ringkasan keuangan dan pelayanan, dalam satu tempat."
                     actions={
-                        <div className="flex gap-2 print:hidden">
+                        <div className="flex flex-wrap gap-2 print:hidden">
                             <Button
-                                type="button"
-                                size="sm"
                                 variant="outline"
+                                size="sm"
                                 disabled={loading}
                                 onClick={() => visit(filters)}
                             >
                                 <RefreshCw
-                                    className={loading ? 'animate-spin' : ''}
-                                />
+                                    className={cn(loading && 'animate-spin')}
+                                />{' '}
                                 Perbarui
                             </Button>
                             <Button
-                                type="button"
-                                size="sm"
                                 variant="outline"
+                                size="sm"
                                 disabled={loading || !section}
                                 onClick={() => window.print()}
                             >
-                                <Printer />
-                                Cetak
+                                <Printer /> Cetak
                             </Button>
-                        </div>
-                    }
-                />
-                <section className="bg-card rounded-xl border p-4 print:hidden">
-                    <form
-                        className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end lg:max-w-2xl"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            const data = new FormData(event.currentTarget);
-                            const from = data.get('from');
-                            const to = data.get('to');
-                            visit({
-                                from: typeof from === 'string' ? from : '',
-                                to: typeof to === 'string' ? to : '',
-                            });
-                        }}
-                    >
-                        <FormField
-                            id="from"
-                            label="Tanggal awal"
-                            error={errors.from}
-                        >
-                            <Input
-                                key={filters.from}
-                                id="from"
-                                name="from"
-                                type="date"
-                                defaultValue={filters.from}
-                                required
-                                disabled={loading}
-                            />
-                        </FormField>
-                        <FormField
-                            id="to"
-                            label="Tanggal akhir"
-                            error={errors.to}
-                        >
-                            <Input
-                                key={filters.to}
-                                id="to"
-                                name="to"
-                                type="date"
-                                defaultValue={filters.to}
-                                required
-                                disabled={loading}
-                            />
-                        </FormField>
-                        <Button type="submit" disabled={loading}>
-                            {loading && (
-                                <LoaderCircle className="size-4 animate-spin" />
-                            )}
-                            Tampilkan laporan
-                        </Button>
-                    </form>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {periods.map((period) => (
-                            <Button
-                                key={period.label}
-                                type="button"
-                                size="sm"
-                                variant={
-                                    period.from === filters.from &&
-                                    period.to === filters.to
-                                        ? 'secondary'
-                                        : 'ghost'
-                                }
-                                disabled={loading}
-                                onClick={() =>
-                                    visit({ from: period.from, to: period.to })
-                                }
-                            >
-                                {period.label}
-                            </Button>
-                        ))}
-                    </div>
-                </section>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <p className="font-medium">
-                        {formatDate(filters.from)} – {formatDate(filters.to)}
-                    </p>
-                    <p className="text-muted-foreground">
-                        Waktu klinik · {timezone}
-                    </p>
-                </div>
-                <div
-                    className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 print:grid-cols-3"
-                    aria-busy={loading}
-                >
-                    {metrics
-                        .filter((metric) => summary[metric.key] !== undefined)
-                        .map((metric) => (
-                            <section
-                                key={metric.key}
-                                className="bg-card min-w-0 rounded-xl border p-4 print:break-inside-avoid"
-                            >
-                                <p className="text-muted-foreground text-xs">
-                                    {metric.label}
-                                </p>
-                                <p className="mt-2 text-2xl font-semibold tracking-tight break-words tabular-nums">
-                                    {metric.currency
-                                        ? formatCurrency(summary[metric.key])
-                                        : summary[metric.key].toLocaleString(
-                                              'id-ID',
-                                          )}
-                                </p>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {metric.detail}
-                                </p>
-                            </section>
-                        ))}
-                </div>
-                {summary.voided_count > 0 && (
-                    <p className="text-muted-foreground text-xs">
-                        {summary.voided_count} pembayaran dalam periode ini
-                        telah dibatalkan, senilai{' '}
-                        {formatCurrency(summary.voided_payments)}.
-                    </p>
-                )}
-                {selected && section ? (
-                    <section
-                        className="bg-card min-w-0 overflow-hidden rounded-xl border"
-                        aria-busy={loading}
-                    >
-                        <nav
-                            className="flex overflow-x-auto border-b px-2 print:hidden"
-                            aria-label="Jenis laporan"
-                        >
-                            {sections.map((value) => (
-                                <button
-                                    key={value}
-                                    type="button"
-                                    disabled={loading}
-                                    aria-current={
-                                        section === value ? 'page' : undefined
-                                    }
-                                    onClick={() =>
-                                        visit(filters, value, [
-                                            'section',
-                                            'rows',
-                                            'sections',
-                                            'canExport',
-                                        ])
-                                    }
-                                    className={cn(
-                                        'focus-visible:ring-ring shrink-0 border-b-2 px-3 py-3.5 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60',
-                                        section === value
-                                            ? 'border-primary text-primary font-semibold'
-                                            : 'text-muted-foreground hover:text-foreground border-transparent',
-                                    )}
-                                >
-                                    {reports[value].title}
-                                </button>
-                            ))}
-                        </nav>
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-                            <div>
-                                <h2 className="text-sm font-semibold">
-                                    {selected.title}
-                                </h2>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {selected.description}
-                                </p>
-                            </div>
-                            {canExport && (
-                                <Button
-                                    asChild
-                                    variant="outline"
-                                    size="sm"
-                                    className="print:hidden"
-                                    disabled={loading}
-                                >
+                            {canExport && section && (
+                                <Button asChild size="sm">
                                     <a
-                                        href={exportMethod.url({
-                                            query: { ...filters, section },
-                                        })}
+                                        href={
+                                            loading
+                                                ? undefined
+                                                : exportMethod.url({
+                                                      query: {
+                                                          ...filters,
+                                                          section,
+                                                      },
+                                                  })
+                                        }
+                                        aria-disabled={loading}
+                                        tabIndex={loading ? -1 : undefined}
+                                        className={cn(
+                                            loading &&
+                                                'pointer-events-none opacity-50',
+                                        )}
                                     >
-                                        <Download className="size-4" />
-                                        Unduh CSV
+                                        <ArrowDownToLine /> Unduh CSV
                                     </a>
                                 </Button>
                             )}
                         </div>
-                        {rows.length === 0 ? (
-                            <div className="grid justify-items-center gap-2 px-5 py-12 text-center">
-                                <BarChart3 className="text-muted-foreground mb-1 size-7" />
-                                <h3 className="text-sm font-semibold">
-                                    Belum ada data pada periode ini
-                                </h3>
-                                <p className="text-muted-foreground text-sm">
-                                    Pilih rentang tanggal lain untuk melihat
-                                    laporan.
-                                </p>
+                    }
+                />
+                <div className="bg-card flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
+                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+                        <span className="text-muted-foreground px-1 text-xs font-medium">
+                            Periode laporan
+                        </span>
+                        <PeriodFilter
+                            key={filters.from + filters.to}
+                            filters={filters}
+                            periods={periods}
+                            loading={loading}
+                            errors={errors}
+                            onApply={(period, onSuccess) =>
+                                visit(period, section, onSuccess)
+                            }
+                        />
+                    </div>
+                    <p className="text-muted-foreground px-1 text-xs">
+                        {timezone}
+                    </p>
+                </div>
+                <p className="hidden text-sm print:block">
+                    Periode {formatDate(filters.from)} –{' '}
+                    {formatDate(filters.to)} · {timezone}
+                </p>
+                {failure && (
+                    <div
+                        role="alert"
+                        className="border-destructive/30 bg-destructive/5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 print:hidden"
+                    >
+                        <p className="text-destructive text-sm">{failure}</p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                            onClick={() =>
+                                retry && visit(retry.period, retry.section)
+                            }
+                        >
+                            Coba lagi
+                        </Button>
+                    </div>
+                )}
+                <div className="sr-only" role="status" aria-live="polite">
+                    {loading
+                        ? 'Memuat laporan…'
+                        : selected
+                          ? `Laporan ${selected.title} siap ditampilkan.`
+                          : ''}
+                </div>
+                {selected && section ? (
+                    <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[200px_minmax(0,1fr)] print:block">
+                        <nav
+                            aria-label="Jenis laporan"
+                            className="bg-card hidden rounded-xl border p-2 xl:block print:hidden"
+                        >
+                            {groups.map((group) => {
+                                const available = group.sections.filter(
+                                    (value) => sections.includes(value),
+                                );
+                                return (
+                                    available.length > 0 && (
+                                        <div
+                                            key={group.title}
+                                            className="mb-2 last:mb-0"
+                                        >
+                                            <p className="text-muted-foreground px-3 pt-2 pb-2 text-[11px] font-medium tracking-wide uppercase">
+                                                {group.title}
+                                            </p>
+                                            {available.map((value) => {
+                                                const Icon = icons[value];
+                                                return (
+                                                    <button
+                                                        key={value}
+                                                        type="button"
+                                                        disabled={loading}
+                                                        aria-current={
+                                                            section === value
+                                                                ? 'page'
+                                                                : undefined
+                                                        }
+                                                        onClick={() =>
+                                                            visit(
+                                                                filters,
+                                                                value,
+                                                            )
+                                                        }
+                                                        className={cn(
+                                                            'focus-visible:ring-ring flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60',
+                                                            section === value
+                                                                ? 'bg-primary/8 text-primary font-semibold'
+                                                                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                                        )}
+                                                    >
+                                                        <Icon className="size-4 shrink-0" />
+                                                        <span className="flex-1">
+                                                            {
+                                                                reports[value]
+                                                                    .title
+                                                            }
+                                                        </span>
+                                                        {section === value && (
+                                                            <ChevronRight className="size-3.5" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )
+                                );
+                            })}
+                        </nav>
+                        <section
+                            className="bg-card min-w-0 overflow-hidden rounded-xl border print:overflow-visible"
+                            aria-busy={loading}
+                            aria-labelledby="report-title"
+                        >
+                            <div className="border-b p-3 xl:hidden print:hidden">
+                                <Select
+                                    value={section}
+                                    disabled={loading}
+                                    onValueChange={(value) =>
+                                        visit(filters, value as ReportSection)
+                                    }
+                                >
+                                    <SelectTrigger
+                                        className="w-full"
+                                        aria-label="Jenis laporan"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent
+                                        avoidCollisions
+                                        collisionPadding={12}
+                                        align="start"
+                                    >
+                                        {groups
+                                            .flatMap((group) => group.sections)
+                                            .filter((value) =>
+                                                sections.includes(value),
+                                            )
+                                            .map((value) => (
+                                                <SelectItem
+                                                    key={value}
+                                                    value={value}
+                                                >
+                                                    {reports[value].title}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        ) : (
-                            <div
-                                className={cn(
-                                    'overflow-x-auto transition-opacity',
-                                    loading && 'opacity-50',
+                            <div className="flex items-start gap-3 border-b p-4">
+                                <div className="bg-muted/30 rounded-lg border p-2 print:hidden">
+                                    <SelectedIcon className="text-muted-foreground size-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h2
+                                        id="report-title"
+                                        className="text-sm font-semibold"
+                                    >
+                                        {selected.title}
+                                    </h2>
+                                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                                        {selected.description}
+                                    </p>
+                                </div>
+                                {loading && (
+                                    <LoaderCircle className="text-primary size-4 shrink-0 animate-spin print:hidden" />
                                 )}
-                            >
-                                <table className="w-full text-sm">
-                                    <caption className="sr-only">
-                                        {selected.title} periode {filters.from}{' '}
-                                        sampai {filters.to}
-                                    </caption>
-                                    <thead className="bg-muted/30 text-muted-foreground">
-                                        <tr>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-left text-xs font-medium"
-                                            >
-                                                {selected.label}
-                                            </th>
-                                            <th
-                                                scope="col"
-                                                className="px-4 py-3 text-right text-xs font-medium"
-                                            >
-                                                {selected.count}
-                                            </th>
-                                            {selected.amount && (
-                                                <th
-                                                    scope="col"
-                                                    className="px-4 py-3 text-right text-xs font-medium whitespace-nowrap"
-                                                >
-                                                    {selected.amount}
-                                                </th>
-                                            )}
-                                            {section === 'billing' && (
-                                                <th
-                                                    scope="col"
-                                                    className="px-4 py-3 text-right text-xs font-medium whitespace-nowrap"
-                                                >
-                                                    Sisa saat ini
-                                                </th>
-                                            )}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y">
-                                        {rows.map((row) => (
-                                            <tr key={row.label}>
-                                                <td className="px-4 py-3 break-words">
-                                                    {section === 'visits'
-                                                        ? formatDate(row.label)
-                                                        : row.label}
-                                                </td>
-                                                <td className="px-4 py-3 text-right tabular-nums">
-                                                    {row.count.toLocaleString(
-                                                        'id-ID',
-                                                    )}
-                                                </td>
-                                                {selected.amount && (
-                                                    <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
-                                                        {formatCurrency(
-                                                            row.amount ?? 0,
-                                                        )}
-                                                    </td>
-                                                )}
-                                                {section === 'billing' && (
-                                                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap tabular-nums">
-                                                        {formatCurrency(
-                                                            row.balance ?? 0,
-                                                        )}
-                                                    </td>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
                             </div>
-                        )}
-                        <div className="bg-muted/20 border-t px-4 py-3">
-                            <p className="text-muted-foreground text-xs leading-relaxed">
-                                {selected.note}
-                            </p>
-                        </div>
-                    </section>
+                            <ReportOverview section={section} summary={summary} rows={rows} />
+                            <ReportDetails
+                                key={section + filters.from + filters.to}
+                                rows={rows}
+                                section={section}
+                                filters={filters}
+                                loading={loading}
+                            />
+                        </section>
+                    </div>
                 ) : (
-                    <section className="rounded-xl border p-6 text-center">
+                    <section className="rounded-xl border p-8 text-center">
                         <h2 className="text-sm font-semibold">
                             Belum ada kategori laporan yang dapat diakses
                         </h2>
@@ -501,9 +381,17 @@ export default function Reports({
                         </p>
                     </section>
                 )}
-                <p className="text-muted-foreground text-xs">
-                    Laporan dan ekspor berisi ringkasan tanpa identitas pasien.
-                </p>
+                <footer className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs leading-relaxed">
+                    <p>Ringkasan tanpa identitas pasien.</p>
+                    <p>
+                        Laporan dimuat{' '}
+                        {new Intl.DateTimeFormat('id-ID', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                            timeZone: timezone,
+                        }).format(new Date(generatedAt))}
+                    </p>
+                </footer>
             </div>
         </>
     );

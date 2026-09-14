@@ -49,14 +49,21 @@ export function MedicalRecordFiles({
                     <div className="bg-muted h-12 rounded-lg" />
                 </div>
             ) : files === undefined ? (
-                <div className="grid justify-items-start gap-2 text-sm" role="alert">
+                <div
+                    className="grid justify-items-start gap-2 text-sm"
+                    role="alert"
+                >
                     <p>Lampiran belum berhasil dimuat.</p>
-                    <Button variant="outline" size="sm" onClick={loadFiles}>Coba lagi</Button>
+                    <Button variant="outline" size="sm" onClick={loadFiles}>
+                        Coba lagi
+                    </Button>
                 </div>
-            ) : files.length === 0 && (
-                <p className="text-muted-foreground text-sm">
-                    Belum ada lampiran.
-                </p>
+            ) : (
+                files.length === 0 && (
+                    <p className="text-muted-foreground text-sm">
+                        Belum ada lampiran.
+                    </p>
+                )
             )}
             {files?.map((file) => (
                 <a

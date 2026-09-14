@@ -24,7 +24,7 @@ class ReportController extends Controller
 
         return Inertia::render('reports/index', [
             'filters' => ['from' => $from, 'to' => $to],
-            'summary' => fn (): array => $report->summary($request->user(), $from, $to),
+            'summary' => fn (): array => $section === null ? [] : $report->summary($section, $from, $to),
             'sections' => $sections,
             'section' => $section,
             'rows' => fn (): array => $section === null ? [] : $report->rows($section, $from, $to),
@@ -35,6 +35,7 @@ class ReportController extends Controller
                 ['label' => 'Bulan lalu', 'from' => $today->subMonthNoOverflow()->startOfMonth()->toDateString(), 'to' => $today->subMonthNoOverflow()->endOfMonth()->toDateString()],
             ],
             'timezone' => $currentClinic->get()->timezone,
+            'generatedAt' => fn (): string => CarbonImmutable::now()->toIso8601String(),
             'canExport' => $request->user()->hasClinicPermission('report.export'),
         ]);
     }
@@ -43,7 +44,7 @@ class ReportController extends Controller
     {
         $sections = $report->sections($request->user());
         $section = $request->string('section', $sections[0] ?? 'visits')->toString();
-        abort_unless(in_array($section, $report->sections($request->user()), true), 403);
+        abort_unless(in_array($section, $sections, true), 403);
         $rows = $report->rows($section, $request->string('from')->toString(), $request->string('to')->toString());
 
         return response()->streamDownload(function () use ($rows, $section): void {
